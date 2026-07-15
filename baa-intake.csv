@@ -1,0 +1,8 @@
+Vendor,Product used,Route,Contact / URL,Plan tier required,Our current plan,Request sent,Follow-up 1 sent,Follow-up 2 sent,BAA received,BAA countersigned,Effective date,Renewal date,Status,Notes
+OpenAI,Whisper API + Chat completions,Portal,https://platform.openai.com — Settings > Organization > Legal & compliance,API + ZDR rider,,,,,,,,,requested,"Must also check Zero Data Retention box; without ZDR the BAA does not cover PHI in requests"
+Anthropic,Claude API (opus/sonnet models),Email,legal@anthropic.com,Team/Enterprise or API with prior arrangement,,,,,,,,,requested,"May require sales call before BAA is drafted"
+Neon,Postgres (ep-empty-violet-atovl6j8-pooler / us-east-1),Email,support@neon.tech,Scale plan ($69/mo minimum),,,,,,,,,upgrade-first,"Must upgrade to Scale before BAA is issued"
+Upstash,Redis (fine-piranha-148206),Form,https://upstash.com/enterprise,Enterprise (pricing on inquiry),,,,,,,,,requested,"Sales-driven — expect a call before signature"
+Fly.io,Machines (app: hei-atlas-api / iad),Email,billing@fly.io,Paid plan + signed order form,,,,,,,,,requested,"Process documented at fly.io/docs/about/healthcare"
+Vercel,Frontend hosting (project: hei-atlas),Form,https://vercel.com/contact/sales,Enterprise only,,,,,,,,,requested,"Enterprise plan required — expect pricing conversation first"
+Resend,Transactional email (domain: heiatlas.ai),Email,team@resend.com,Business or Enterprise,,,,,,,,,requested,"Domain already verified in Resend dashboard"
