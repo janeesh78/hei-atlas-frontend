@@ -23,7 +23,7 @@ export default function PrivacyPage() {
         <p className="text-muted mb-6">Effective Date: July 15, 2026</p>
 
         <p>
-          This Privacy Policy describes how Oncology Solutions (&ldquo;Company,&rdquo;
+          This Privacy Policy describes how Oncology Solutions LLC (&ldquo;Company,&rdquo;
           &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) collects, uses, stores,
           discloses, and safeguards personal information and Protected Health Information (PHI)
           processed through our medical ambient listening software, applications, APIs, and
@@ -52,7 +52,7 @@ export default function PrivacyPage() {
         <p>
           This Privacy Policy applies to licensed healthcare professionals, clinical staff, and
           enterprise health systems (collectively, &ldquo;Users&rdquo; or
-          &ldquo;Providers&rdquo;) utilizing the Oncology Solutions ambient scribe platform.
+          &ldquo;Providers&rdquo;) utilizing the Oncology Solutions LLC ambient scribe platform.
         </p>
         <ul className="list-disc pl-5 mt-2 space-y-2">
           <li>
@@ -126,7 +126,7 @@ export default function PrivacyPage() {
           3. The Ambient Data Lifecycle (Audio Deletion Policy)
         </h2>
         <p>
-          To limit data exposure and safeguard patient privacy, Oncology Solutions operates on a
+          To limit data exposure and safeguard patient privacy, Oncology Solutions LLC operates on a
           strict transient storage workflow for all voice and conversational data:
         </p>
         <ul className="list-disc pl-5 mt-2 space-y-2">
@@ -155,7 +155,7 @@ export default function PrivacyPage() {
           4. How We Process Your Information
         </h2>
         <p>
-          Oncology Solutions processes your data strictly for legitimate clinical, administrative,
+          Oncology Solutions LLC processes your data strictly for legitimate clinical, administrative,
           and security purposes:
         </p>
         <ul className="list-disc pl-5 mt-2 space-y-2">
@@ -211,8 +211,9 @@ export default function PrivacyPage() {
         <ul className="list-disc pl-5 mt-2 space-y-2">
           <li>
             <span className="font-medium">Zero Training on Live Patient PHI:</span> Oncology
-            Solutions does not use active Patient PHI, raw conversational audio, or live encounter
-            transcripts to train public, third-party generative artificial intelligence models.
+            Solutions LLC does not use active Patient PHI, raw conversational audio, or live
+            encounter transcripts to train public, third-party generative artificial intelligence
+            models.
           </li>
           <li>
             <span className="font-medium">Secure Enterprise Environments:</span> Any AI model
@@ -276,7 +277,7 @@ export default function PrivacyPage() {
           9. B2B Exemptions &amp; State Privacy Laws
         </h2>
         <p>
-          Oncology Solutions is a specialized, business-to-business (B2B) clinical platform
+          Oncology Solutions LLC is a specialized, business-to-business (B2B) clinical platform
           operating exclusively for healthcare institutions and verified medical practitioners.
         </p>
         <ul className="list-disc pl-5 mt-2 space-y-2">
@@ -309,7 +310,7 @@ export default function PrivacyPage() {
           processing, please contact us at:
         </p>
         <p className="mt-2">
-          Oncology Solutions
+          Oncology Solutions LLC
           <br />
           Email:{' '}
           <a className="text-accent" href="mailto:compliance@oncologysolutions.us">
