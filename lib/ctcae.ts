@@ -504,10 +504,28 @@ export interface ExtractedToxicity {
   expected?: boolean;
 }
 
+// Phrases that mean the term is explicitly denied/absent — the symptom is
+// documented as NOT present, full stop. These are excluded from output
+// entirely (see extractToxicities): a denial is not a lesser-confidence
+// finding, it's the opposite of one, and must never surface with a grade.
+const NEGATION_CONTEXT = [
+  /\bno\s+(?:evidence\s+of\s+)?/i,
+  /\bno\s+current\s+/i,
+  /\bno\s+recent\s+/i,
+  /\bno\s+ongoing\s+/i,
+  /\bdenies\b/i,
+  /\bdenied\b/i, // "Diarrhea denied" — term-then-negator order, not just "denies X"
+  /\bwithout\s+/i,
+  /\bnegative\s+for/i,
+  /\brule\s+out/i,
+  /\bnone\b/i, // "Nausea: None." / "Vomiting - none this cycle"
+];
+
 // Phrases that indicate the term is being discussed as a *potential* AE during
 // counseling/education, OR a *historical/resolved* finding pulled forward
 // from a previous encounter — neither should count as an active documented
-// toxicity. Matches inside any of these contexts are skipped.
+// toxicity. Matches inside any of these contexts are surfaced as `expected`
+// (see extractToxicities) rather than graded as a current finding.
 const COUNSELING_CONTEXT = [
   // ── Counseling / risk discussion (anticipatory) ──
   /counsel(?:ed|ing)\s+(?:on|about|regarding)/i,
@@ -525,16 +543,6 @@ const COUNSELING_CONTEXT = [
   /side\s+effects?\s+(?:include|may|can)/i,
   /may\s+(?:cause|develop|experience)/i,
   /can\s+(?:cause|develop)/i,
-
-  // ── Negation / absent ──
-  /\bno\s+(?:evidence\s+of\s+)?/i,
-  /\bno\s+current\s+/i,
-  /\bno\s+recent\s+/i,
-  /\bno\s+ongoing\s+/i,
-  /\bdenies\b/i,
-  /\bwithout\s+/i,
-  /\bnegative\s+for/i,
-  /\brule\s+out/i,
 
   // ── Historical / resolved / pulled-forward references ──
   /\bhistory\s+of\s+/i,
@@ -560,16 +568,14 @@ const COUNSELING_CONTEXT = [
 ];
 
 /**
- * True when the match falls inside a counseling/risk-discussion clause or a
- * historical/resolved reference rather than active documentation.
- *
- * Scans up to 200 chars backward (often the relevant qualifier "previously
- * had", "at last visit", "during prior chemo" sits early in the sentence)
- * and 120 chars forward (catches "X, now resolved" / "X, since improved").
+ * Clause-scoped haystack around a match: up to 200 chars backward (often the
+ * relevant qualifier "previously had", "at last visit", "no nausea, " sits
+ * early in the sentence) and 120 chars forward (catches "X, now resolved" /
+ * "X: none"), restricted to the current sentence so a prior sentence's
+ * qualifier doesn't leak in.
  */
-function inCounselingContext(text: string, matchIdx: number, matchLen: number): boolean {
+function clauseHaystack(text: string, matchIdx: number, matchLen: number): string {
   const back = text.slice(Math.max(0, matchIdx - 200), matchIdx);
-  // Find the start of the current sentence (so we don't pull a prior sentence's qualifier)
   const sentenceStart = Math.max(
     back.lastIndexOf('. '),
     back.lastIndexOf('? '),
@@ -579,8 +585,30 @@ function inCounselingContext(text: string, matchIdx: number, matchLen: number): 
   );
   const clauseText =
     sentenceStart >= 0 ? back.slice(sentenceStart + 1) : back;
-  const forward = text.slice(matchIdx + matchLen, matchIdx + matchLen + 120);
-  const haystack = clauseText + ' ' + forward;
+
+  // Mirror the backward scoping: stop at the next sentence boundary so a
+  // different symptom's clause ("Vomiting: none. Diarrhea: denied.") can't
+  // leak into this match's context (e.g. grading "Nausea" in a list of
+  // per-symptom statuses picking up a neighboring symptom's "denied").
+  const forwardRaw = text.slice(matchIdx + matchLen, matchIdx + matchLen + 120);
+  const boundary = forwardRaw.search(/[.?!\n]/);
+  const forward = boundary === -1 ? forwardRaw : forwardRaw.slice(0, boundary + 1);
+
+  return clauseText + ' ' + forward;
+}
+
+/** True when the match is explicitly denied/absent ("no nausea", "denies vomiting"). */
+function isNegated(text: string, matchIdx: number, matchLen: number): boolean {
+  const haystack = clauseHaystack(text, matchIdx, matchLen);
+  return NEGATION_CONTEXT.some((p) => p.test(haystack));
+}
+
+/**
+ * True when the match falls inside a counseling/risk-discussion clause or a
+ * historical/resolved reference rather than active documentation.
+ */
+function inCounselingContext(text: string, matchIdx: number, matchLen: number): boolean {
+  const haystack = clauseHaystack(text, matchIdx, matchLen);
   return COUNSELING_CONTEXT.some((p) => p.test(haystack));
 }
 
@@ -588,9 +616,12 @@ function inCounselingContext(text: string, matchIdx: number, matchLen: number): 
  * Pull toxicity terms out of free-text. Returns one entry per detected toxicity
  * with a window of surrounding words as the severityText (used for grading).
  *
- * Skips matches that fall inside counseling/education contexts (e.g.,
- * "counseled on immune-related adverse events including hepatitis") to avoid
- * hallucinating toxicities the patient does not actually have.
+ * Explicitly denied mentions ("no nausea", "denies vomiting") are dropped
+ * entirely — never graded, never surfaced as expected. Matches that fall
+ * inside counseling/education or historical/resolved contexts (e.g.,
+ * "counseled on immune-related adverse events including hepatitis") are
+ * surfaced as `expected` rather than graded as a current finding. Together
+ * these avoid hallucinating toxicities the patient does not actually have.
  */
 export function extractToxicities(
   text: string,
@@ -612,6 +643,7 @@ export function extractToxicities(
       let m: RegExpExecArray | null;
       let accepted = false;
       while ((m = re.exec(text)) !== null) {
+        if (isNegated(text, m.index, m[0].length)) continue;
         if (inCounselingContext(text, m.index, m[0].length)) {
           if (!counseled) counseled = { idx: m.index, len: m[0].length };
           continue;
