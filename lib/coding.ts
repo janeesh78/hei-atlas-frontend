@@ -194,8 +194,13 @@ const PRIMARY_ICD: IcdRule[] = [
   { patterns: [/chronic\s+myeloid\s+leukemia/i, /\bcml\b/i], code: 'C92.10', description: 'Chronic myeloid leukemia, BCR/ABL-positive, not having achieved remission' },
   // GI / hepatobiliary
   { patterns: [/hepatocellular\s+carcinoma/i, /\bhcc\b/i], code: 'C22.0', description: 'Liver cell carcinoma' },
-  { patterns: [/gastric\s+(?:cancer|carcinoma)/i], code: 'C16.9', description: 'Malignant neoplasm of stomach, unspecified' },
-  { patterns: [/esophageal\s+(?:cancer|carcinoma)/i], code: 'C15.9', description: 'Malignant neoplasm of esophagus, unspecified' },
+  // Gastroesophageal junction / cardia — checked before the generic gastric
+  // and esophageal rules below so GEJ/Siewert II-III and cardia-sited
+  // adenocarcinomas (e.g. MATTERHORN-regimen perioperative disease) map to
+  // the specific cardia code instead of falling through to an unspecified one.
+  { patterns: [/gastro[- ]?esophageal\s+junction/i, /esophagogastric\s+junction/i, /\bgej\b/i, /\bge\s+junction\b/i, /gastric\s+cardia/i, /cardia\s+adenocarcinoma/i], code: 'C16.0', description: 'Malignant neoplasm of cardia' },
+  { patterns: [/gastric\s+(?:cancer|carcinoma|adenocarcinoma)/i, /adenocarcinoma\s+of\s+the\s+stomach/i, /stomach\s+(?:cancer|carcinoma)/i], code: 'C16.9', description: 'Malignant neoplasm of stomach, unspecified' },
+  { patterns: [/esophageal\s+(?:cancer|carcinoma|adenocarcinoma)/i, /adenocarcinoma\s+of\s+the\s+esophagus/i], code: 'C15.9', description: 'Malignant neoplasm of esophagus, unspecified' },
   // Gyn
   { patterns: [/ovarian\s+(?:cancer|carcinoma)/i], code: 'C56.9', description: 'Malignant neoplasm of unspecified ovary' },
   { patterns: [/endometrial\s+(?:cancer|carcinoma)/i, /uterine\s+(?:cancer|carcinoma)/i], code: 'C54.1', description: 'Malignant neoplasm of endometrium' },
