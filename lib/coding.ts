@@ -767,12 +767,29 @@ function buildDocumentationGaps(
     });
   }
 
-  if (!data.some((d) => /pathology/i.test(d.description)) && note.cancer_type) {
+  // A cancer_type of "anemia"/"thrombocytopenia"/etc. is a benign cytopenia
+  // workup, not an active malignancy — pathology/molecular review doesn't
+  // apply, but peripheral smear review does.
+  const cancerTypeIsCytopenia = /\b(?:anemia|thrombocytopenia|leukopenia|neutropenia)\b/i.test(
+    note.cancer_type || ''
+  );
+
+  if (!data.some((d) => /pathology/i.test(d.description)) && note.cancer_type && !cancerTypeIsCytopenia) {
     gaps.push({
       area: 'Pathology / molecular review',
       description: 'Active oncologic diagnosis without documented pathology or molecular review.',
       suggestion:
         'When relevant to the encounter, add: "Reviewed pathology / molecular testing including [biomarkers]."',
+      severity: 'minor',
+    });
+  }
+
+  if (cancerTypeIsCytopenia && !data.some((d) => /smear/i.test(d.description))) {
+    gaps.push({
+      area: 'Peripheral smear review',
+      description:
+        'Diagnosis is a cytopenia (anemia / thrombocytopenia / leukopenia / neutropenia) without documented peripheral smear review.',
+      suggestion: 'When relevant to the encounter, add: "Reviewed peripheral smear."',
       severity: 'minor',
     });
   }
