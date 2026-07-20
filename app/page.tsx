@@ -52,8 +52,9 @@ export default function LandingPage() {
         <p className="text-[1.25rem] leading-[1.6] text-muted max-w-[580px] mb-12">
           Voice-first ambient documentation and clinical decision support for oncology.
         </p>
-        <div
-          className="w-full max-w-[500px] flex items-center justify-center"
+        <Link
+          href="/login"
+          className="w-full max-w-[500px] flex items-center justify-center transition-transform hover:scale-[1.015]"
           style={{ filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.06))' }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -63,7 +64,7 @@ export default function LandingPage() {
             className="w-full h-auto max-h-[45vh] object-contain select-none"
             draggable={false}
           />
-        </div>
+        </Link>
       </main>
 
       {/* ── Company + Contact ────────────────────────────────────── */}
