@@ -544,6 +544,17 @@ const COUNSELING_CONTEXT = [
   /may\s+(?:cause|develop|experience)/i,
   /can\s+(?:cause|develop)/i,
 
+  // ── Prophylaxis / prevention (medication named for what it prevents,
+  //    not for what the patient currently has — e.g. "continue ondansetron
+  //    for nausea/vomiting prophylaxis"). Requires the "for ... prophylaxis"
+  //    / "to prevent" construction rather than a bare "prophylactic" nearby,
+  //    so a genuine breakthrough finding ("Grade 2 nausea despite
+  //    prophylactic ondansetron") isn't swallowed by the word's mere presence.
+  /\bfor\s+(?:[\w/-]+\s+){0,3}prophylaxis\b/i,
+  /\bfor\s+(?:[\w/-]+\s+){0,3}prevention\b/i,
+  /\bto\s+prevent\b/i,
+  /\bprevention\s+of\b/i,
+
   // ── Historical / resolved / pulled-forward references ──
   /\bhistory\s+of\s+/i,
   /\bremote\s+history\s+of\s+/i,
@@ -568,13 +579,13 @@ const COUNSELING_CONTEXT = [
 ];
 
 /**
- * Clause-scoped haystack around a match: up to 200 chars backward (often the
- * relevant qualifier "previously had", "at last visit", "no nausea, " sits
- * early in the sentence) and 120 chars forward (catches "X, now resolved" /
- * "X: none"), restricted to the current sentence so a prior sentence's
- * qualifier doesn't leak in.
+ * Backward context: up to 200 chars, restricted to the current sentence (the
+ * relevant qualifier — "previously had", "at last visit", "no nausea, " —
+ * usually sits early in the sentence) so a prior sentence's qualifier can't
+ * leak in. Comma-tolerant on purpose: a shared leading negator needs to reach
+ * every item in a list ("no nausea, vomiting, or diarrhea" negates all three).
  */
-function clauseHaystack(text: string, matchIdx: number, matchLen: number): string {
+function clauseBack(text: string, matchIdx: number): string {
   const back = text.slice(Math.max(0, matchIdx - 200), matchIdx);
   const sentenceStart = Math.max(
     back.lastIndexOf('. '),
@@ -583,23 +594,26 @@ function clauseHaystack(text: string, matchIdx: number, matchLen: number): strin
     back.lastIndexOf('\n'),
     -1
   );
-  const clauseText =
-    sentenceStart >= 0 ? back.slice(sentenceStart + 1) : back;
+  return sentenceStart >= 0 ? back.slice(sentenceStart + 1) : back;
+}
 
-  // Mirror the backward scoping: stop at the next sentence boundary so a
-  // different symptom's clause ("Vomiting: none. Diarrhea: denied.") can't
-  // leak into this match's context (e.g. grading "Nausea" in a list of
-  // per-symptom statuses picking up a neighboring symptom's "denied").
-  const forwardRaw = text.slice(matchIdx + matchLen, matchIdx + matchLen + 120);
-  const boundary = forwardRaw.search(/[.?!\n]/);
-  const forward = boundary === -1 ? forwardRaw : forwardRaw.slice(0, boundary + 1);
-
-  return clauseText + ' ' + forward;
+/**
+ * Forward context, up to 120 chars. `tight` stops at the next comma/semicolon
+ * as well as sentence-enders — used for negation, where a comma usually opens
+ * a *new* clause about a different symptom ("mild nausea, no vomiting" must
+ * not let that "no" negate "nausea"). Without `tight`, only sentence-enders
+ * bound it — used for counseling-context, which needs comma-joined qualifiers
+ * like "X, now resolved" / "X, since improved" to stay in view.
+ */
+function clauseForward(text: string, matchEnd: number, tight: boolean): string {
+  const forwardRaw = text.slice(matchEnd, matchEnd + 120);
+  const boundary = forwardRaw.search(tight ? /[.,;?!\n]/ : /[.?!\n]/);
+  return boundary === -1 ? forwardRaw : forwardRaw.slice(0, boundary + 1);
 }
 
 /** True when the match is explicitly denied/absent ("no nausea", "denies vomiting"). */
 function isNegated(text: string, matchIdx: number, matchLen: number): boolean {
-  const haystack = clauseHaystack(text, matchIdx, matchLen);
+  const haystack = clauseBack(text, matchIdx) + ' ' + clauseForward(text, matchIdx + matchLen, true);
   return NEGATION_CONTEXT.some((p) => p.test(haystack));
 }
 
@@ -608,7 +622,7 @@ function isNegated(text: string, matchIdx: number, matchLen: number): boolean {
  * historical/resolved reference rather than active documentation.
  */
 function inCounselingContext(text: string, matchIdx: number, matchLen: number): boolean {
-  const haystack = clauseHaystack(text, matchIdx, matchLen);
+  const haystack = clauseBack(text, matchIdx) + ' ' + clauseForward(text, matchIdx + matchLen, false);
   return COUNSELING_CONTEXT.some((p) => p.test(haystack));
 }
 
