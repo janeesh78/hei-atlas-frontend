@@ -1,15 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/session';
+import { mintConsensusToken } from '@/lib/auth';
 
 type ModuleDef = {
   key: string;
   title: string;
   blurb: string;
   href: string | null; // null → coming soon
+  /** True → clicking mints a Consensus SSO token first, then navigates,
+   * instead of a plain internal Link (href is the no-SSO fallback URL). */
+  sso?: boolean;
 };
 
 const MODULES: ModuleDef[] = [
@@ -29,12 +33,13 @@ const MODULES: ModuleDef[] = [
     key: 'consensus',
     title: 'ATLAS Consensus',
     blurb: 'Multi-source guideline consensus for complex or unusual presentations powered by AI with real human input.',
-    // Direct navigation to the OncBridge/Consensus app. Real Hei Atlas SSO
-    // (auto-authenticating the session across subdomains) is built on the
-    // OncBridge side but not yet configured with real credentials -- until
-    // then, an unauthenticated user lands on Consensus's own login screen,
-    // which is the correct interim behavior rather than a broken handoff.
+    // Real SSO handoff: mints a short-lived RS256 token asserting this
+    // user's identity (routers/sso.py) and redirects into Consensus's own
+    // /sso callback, which exchanges it for a real session -- no second
+    // login. href is the fallback if minting fails (e.g. session hiccup),
+    // landing on Consensus's own login screen rather than a dead end.
     href: 'https://app.heiatlas.ai/#/home',
+    sso: true,
   },
 ];
 
@@ -101,6 +106,7 @@ export default function WorkspaceHub() {
 
 function ModuleCard({ module: m }: { module: ModuleDef }) {
   const disabled = m.href === null;
+  const [minting, setMinting] = useState(false);
 
   const card = (
     <div className={`relative flex flex-col items-center text-center transition-transform ${disabled ? '' : 'hover:scale-[1.02] cursor-pointer'}`}>
@@ -147,6 +153,31 @@ function ModuleCard({ module: m }: { module: ModuleDef }) {
       </div>
     );
   }
+
+  if (m.sso) {
+    return (
+      <button
+        type="button"
+        disabled={minting}
+        onClick={async () => {
+          setMinting(true);
+          try {
+            const { token } = await mintConsensusToken();
+            window.location.href = `https://app.heiatlas.ai/#/sso?token=${encodeURIComponent(token)}&dest=/home`;
+          } catch (err) {
+            // Session hiccup or the endpoint isn't reachable — fall back to
+            // Consensus's own login rather than leaving the user stuck here.
+            console.error('Failed to start ATLAS Consensus session', err);
+            window.location.href = m.href!;
+          }
+        }}
+        className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-card disabled:cursor-wait"
+      >
+        {card}
+      </button>
+    );
+  }
+
   return (
     <Link href={m.href!} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-card">
       {card}
