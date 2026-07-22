@@ -4,16 +4,17 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/session';
-import { mintConsensusToken } from '@/lib/auth';
+import { mintOncBridgeSsoToken } from '@/lib/auth';
 
 type ModuleDef = {
   key: string;
   title: string;
   blurb: string;
   href: string | null; // null → coming soon
-  /** True → clicking mints a Consensus SSO token first, then navigates,
-   * instead of a plain internal Link (href is the no-SSO fallback URL). */
-  sso?: boolean;
+  /** Set → clicking mints an OncBridge SSO token first, then navigates to
+   * app.heiatlas.ai/#/sso with this as the post-login destination, instead
+   * of a plain internal Link (href is the no-SSO fallback URL). */
+  ssoDest?: string;
 };
 
 const MODULES: ModuleDef[] = [
@@ -27,7 +28,12 @@ const MODULES: ModuleDef[] = [
     key: 'integrator',
     title: 'ATLAS Clinical Record Integrator',
     blurb: 'Reconcile prior records, imaging, pathology, and labs from disparate EHRs into a single longitudinal view.',
-    href: null,
+    // Real SSO handoff, same mechanism as ATLAS Consensus below -- this was
+    // in fact the originally designed use case (/cri is the OncBridge
+    // router's default `dest` when none is given). href is the fallback if
+    // minting fails, landing on CRI's own login rather than a dead end.
+    href: 'https://app.heiatlas.ai/#/cri',
+    ssoDest: '/cri',
   },
   {
     key: 'consensus',
@@ -39,7 +45,7 @@ const MODULES: ModuleDef[] = [
     // login. href is the fallback if minting fails (e.g. session hiccup),
     // landing on Consensus's own login screen rather than a dead end.
     href: 'https://app.heiatlas.ai/#/home',
-    sso: true,
+    ssoDest: '/home',
   },
 ];
 
@@ -154,7 +160,7 @@ function ModuleCard({ module: m }: { module: ModuleDef }) {
     );
   }
 
-  if (m.sso) {
+  if (m.ssoDest) {
     return (
       <button
         type="button"
@@ -162,12 +168,12 @@ function ModuleCard({ module: m }: { module: ModuleDef }) {
         onClick={async () => {
           setMinting(true);
           try {
-            const { token } = await mintConsensusToken();
-            window.location.href = `https://app.heiatlas.ai/#/sso?token=${encodeURIComponent(token)}&dest=/home`;
+            const { token } = await mintOncBridgeSsoToken();
+            window.location.href = `https://app.heiatlas.ai/#/sso?token=${encodeURIComponent(token)}&dest=${encodeURIComponent(m.ssoDest!)}`;
           } catch (err) {
             // Session hiccup or the endpoint isn't reachable — fall back to
-            // Consensus's own login rather than leaving the user stuck here.
-            console.error('Failed to start ATLAS Consensus session', err);
+            // this module's own login rather than leaving the user stuck here.
+            console.error(`Failed to start ${m.title} session`, err);
             window.location.href = m.href!;
           }
         }}

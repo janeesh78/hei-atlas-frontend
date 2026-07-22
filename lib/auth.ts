@@ -315,11 +315,15 @@ export async function sendNoteFeedback(payload: {
   });
 }
 
-// ATLAS Consensus SSO handoff — mints a short-lived RS256 token asserting
-// the current user's identity for app.heiatlas.ai to verify and exchange
-// for its own session (see routers/sso.py + OncBridge's sso.py). Requires
-// the caller to already be authenticated here (authedFetch attaches the
-// bearer token); the returned token is meant to be used immediately.
-export async function mintConsensusToken(): Promise<{ token: string }> {
+// OncBridge SSO handoff — mints a short-lived RS256 token asserting the
+// current user's identity for app.heiatlas.ai to verify and exchange for
+// its own session (see routers/sso.py + OncBridge's sso.py). Shared by
+// every ATLAS module hosted on app.heiatlas.ai (Consensus, CRI, ...) --
+// the token itself doesn't encode which module the user is headed to,
+// only their identity; the destination is the `dest` param on the /sso
+// redirect URL. Requires the caller to already be authenticated here
+// (authedFetch attaches the bearer token); the returned token is meant to
+// be used immediately.
+export async function mintOncBridgeSsoToken(): Promise<{ token: string }> {
   return authedFetch<{ token: string }>('/auth/sso/consensus-token', { method: 'POST' });
 }
