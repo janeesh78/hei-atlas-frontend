@@ -29,7 +29,12 @@ const MODULES: ModuleDef[] = [
     key: 'consensus',
     title: 'ATLAS Consensus',
     blurb: 'Multi-source guideline consensus for complex or unusual presentations powered by AI with real human input.',
-    href: null,
+    // Direct navigation to the OncBridge/Consensus app. Real Hei Atlas SSO
+    // (auto-authenticating the session across subdomains) is built on the
+    // OncBridge side but not yet configured with real credentials -- until
+    // then, an unauthenticated user lands on Consensus's own login screen,
+    // which is the correct interim behavior rather than a broken handoff.
+    href: 'https://app.heiatlas.ai/#/home',
   },
 ];
 
