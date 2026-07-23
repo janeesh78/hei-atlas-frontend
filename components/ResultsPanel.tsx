@@ -97,6 +97,7 @@ function buildSections(note: OncologyNote, format: OutputFormat): Section[] {
       return [
         { label: 'Chief Complaint', value: note.chief_complaint || '' },
         { label: 'History of Present Illness', value: note.history_present_illness || '' },
+        { label: 'Prior Oncologic Therapy', value: note.prior_oncologic_therapy || '' },
         { label: 'Past Medical History', value: '' },
         { label: 'Past Surgical History', value: '' },
         { label: 'Medications', value: note.current_medications || '' },
@@ -116,6 +117,7 @@ function buildSections(note: OncologyNote, format: OutputFormat): Section[] {
         { label: 'Referring Provider', value: '' },
         { label: 'History of Present Illness', value: note.history_present_illness || '' },
         { label: 'Oncologic History', value: oncoHx },
+        { label: 'Prior Oncologic Therapy', value: note.prior_oncologic_therapy || '' },
         { label: 'Relevant Labs / Imaging', value: note.lab_imaging_review || '' },
         { label: 'Assessment', value: note.assessment || '' },
         { label: 'Recommendations / Plan', value: note.plan || '' },
