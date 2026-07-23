@@ -1536,7 +1536,7 @@ export default function Home() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <a href="/" className="flex items-center gap-2" aria-label="Hei Atlas home">
+          <a href={user ? '/app' : '/'} className="flex items-center gap-2" aria-label="Hei Atlas home">
             <div className="w-7 h-7 rounded-md bg-accent text-white flex items-center justify-center font-bold text-[12px]">
               HA
             </div>

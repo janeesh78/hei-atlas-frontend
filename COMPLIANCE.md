@@ -39,7 +39,7 @@ one admin dashboard.
 |---|---|---|---|
 | Unique user identification | (a)(2)(i) | CC6.1 | NPI + email at signup; UUID PK on `auth_user`. |
 | Emergency access procedure | (a)(2)(ii) | — | Not required for the current beta scope. Access is via founder-controlled Fly + Neon consoles. |
-| Automatic logoff | (a)(2)(iii) | CC6.1 | 15-minute sliding inactivity TTL enforced server-side (`SESSION_TTL` in `models/user_auth.py`) and matched by a client-side idle timer with a 13-minute warning modal (`lib/session.tsx`). |
+| Automatic logoff | (a)(2)(iii) | CC6.1 | 30-minute sliding inactivity TTL enforced server-side (`SESSION_TTL` in `models/user_auth.py`) and matched by a client-side idle timer with a 28-minute warning modal (`lib/session.tsx`). Activity in any tab of the same browser counts toward the shared timer (localStorage broadcast), so an idle-but-open tab can't sign out a session another tab is actively using. |
 | Encryption / decryption (at rest) | (a)(2)(iv) | CC6.7 | Neon Postgres AES-256 at rest (managed). Upstash Redis AES-256 at rest (managed). Fly volumes encrypted at rest. |
 | Audit controls | (b) | CC7.2 | `phi_access_log` table records every PHI-touching request (encounter read/write/delete, admin dashboard access, self-export, account deletion) with actor, IP, UA, timestamp. Written via `services/phi_audit.py`. Append-only; 6-year retention (`AUDIT_RETENTION`). |
 | Integrity | (c)(1) | CC7.1 | JSON payloads stored verbatim; Postgres enforces UTF-8; SQLAlchemy models are the single source of truth for shape. |
@@ -48,7 +48,7 @@ one admin dashboard.
 
 ### Access control detail
 - Signup and login rate-limited: 5 attempts/email/15min AND 20 attempts/IP/15min.
-- Session tokens are 64-char URL-safe random. 15-minute sliding TTL.
+- Session tokens are 64-char URL-safe random. 30-minute sliding TTL.
 - Admin routes gated by `ADMIN_EMAILS` server-side env var.
 - No public write endpoints reach PHI.
 
@@ -129,3 +129,4 @@ control says.
 ## Change log
 
 - 2026-07-03: Initial version. Shipped: 15-min sliding session TTL, per-IP rate limits, phi_access_log, `/me/export`, `/me/account` delete, `/admin/access-review`, `/admin/incidents`, CSP + COOP + CORP + HSTS headers. Documentation of all vendor + policy work still owed.
+- 2026-07-22: Session inactivity TTL increased from 15 to 30 minutes (server `SESSION_TTL` + client `IDLE_MS`, kept in sync). Client-side idle timer is now synchronized across browser tabs via a localStorage activity broadcast, so activity in one tab keeps the shared session alive in all tabs of the same browser instead of an idle tab independently signing everyone out.

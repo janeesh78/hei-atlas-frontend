@@ -1,13 +1,35 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { fetchMe, getCachedUser, getToken, setCachedUser, setToken, type CurrentUser } from './auth';
+import { fetchMe, getCachedUser, getToken, setCachedUser, setToken, TOKEN_KEY, type CurrentUser } from './auth';
 import { apiFetch } from './apiBase';
 
 // HIPAA §164.312(a)(2)(iii) inactivity timeout. Match the server-side
 // SESSION_TTL exactly so the client + server agree on when to sign out.
-const IDLE_MS = 15 * 60 * 1000;
-const WARN_MS = 13 * 60 * 1000;
+const IDLE_MS = 30 * 60 * 1000;
+const WARN_MS = 28 * 60 * 1000;
+
+// Cross-tab activity broadcast: every tab writes its own activity here so an
+// idle-but-open tab doesn't clock out a session another tab is actively
+// using — all tabs of a browser share one token and are one logical session.
+const ACTIVITY_KEY = 'oncology.lastActivity';
+
+function broadcastActivity(now: number): void {
+  try {
+    localStorage.setItem(ACTIVITY_KEY, String(now));
+  } catch {
+    /* storage unavailable (private mode etc.) — this tab's own clock still works */
+  }
+}
+
+function readBroadcastActivity(): number {
+  try {
+    const raw = localStorage.getItem(ACTIVITY_KEY);
+    return raw ? Number(raw) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 interface SessionValue {
   user: CurrentUser | null;
@@ -98,35 +120,76 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
+  // ── Cross-tab session sync ───────────────────────────────────────────
+  // Sign-in or sign-out in one tab must apply to every tab of the same
+  // browser — they share one localStorage token and are one logical
+  // session. `storage` only fires in OTHER tabs, never the one that made
+  // the change, which is exactly what we want here. Re-run the same
+  // refresh() used at boot so a token appearing/disappearing elsewhere is
+  // handled by the one code path that already knows how to validate it.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === TOKEN_KEY) void refresh();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [refresh]);
+
   // ── Inactivity timeout ────────────────────────────────────────────────
-  // Reset the timer on any real user action. When >15 min elapses without
-  // one, force a logout. Show a warning at 13 min so the user can dismiss
-  // it and stay signed in.
+  // Reset the timer on any real user action, in THIS tab or any other tab
+  // of the same browser (activity broadcasts via localStorage + `storage`
+  // events — see ACTIVITY_KEY). Without this, an idle-but-open tab runs its
+  // own independent clock and logs out the shared token from under a tab
+  // the physician is actively using. When >30 min elapses with no activity
+  // ANYWHERE, force a logout. Show a warning at 28 min so the user can
+  // dismiss it and stay signed in.
   useEffect(() => {
     if (!user) return;
     const mark = () => {
-      lastActivity.current = Date.now();
+      const now = Date.now();
+      lastActivity.current = now;
+      broadcastActivity(now);
       if (idleWarning) setIdleWarning(false);
     };
     const events: (keyof DocumentEventMap)[] = ['mousedown', 'keydown', 'touchstart', 'wheel'];
     events.forEach((e) => document.addEventListener(e, mark, { passive: true }));
+
+    // Another tab's activity (including its recording-in-progress bump
+    // below) resets our idle clock too, without waiting for the next poll.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== ACTIVITY_KEY || !e.newValue) return;
+      const t = Number(e.newValue);
+      if (t > lastActivity.current) {
+        lastActivity.current = t;
+        if (idleWarning) setIdleWarning(false);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
     const iv = setInterval(() => {
       // An active ATLAS recording is presence, not idleness: ambient capture
       // is hands-off by design, and auto-logoff here killed recordings
       // mid-consult (field report 2026-07-09). The flag is set by the
-      // ambient page while MediaRecorder is live or paused. Bumping the
-      // clock also makes the 15-min window restart from recording END.
+      // ambient page while MediaRecorder is live or paused. Bumping (and
+      // broadcasting) the clock also makes the 30-min window restart from
+      // recording END, and keeps a recording in one tab from being logged
+      // out from under it by an idle sibling tab.
       if (document.documentElement.dataset.recording === '1') {
-        lastActivity.current = Date.now();
+        const now = Date.now();
+        lastActivity.current = now;
+        broadcastActivity(now);
         if (idleWarning) setIdleWarning(false);
         return;
       }
+      const shared = readBroadcastActivity();
+      if (shared > lastActivity.current) lastActivity.current = shared;
       const idle = Date.now() - lastActivity.current;
       if (idle >= IDLE_MS) logout();
       else if (idle >= WARN_MS) setIdleWarning(true);
     }, 15_000);
     return () => {
       events.forEach((e) => document.removeEventListener(e, mark));
+      window.removeEventListener('storage', onStorage);
       clearInterval(iv);
     };
   }, [user, idleWarning, logout]);

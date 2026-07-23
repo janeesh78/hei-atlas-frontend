@@ -125,7 +125,7 @@ export default function LeftSidebar({
       {/* Brand + user chip at top-left */}
       <div className="px-5 py-4 border-b border-rule space-y-3">
         <Link
-          href="/"
+          href={user ? '/app' : '/'}
           className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
           aria-label="Hei Atlas home"
         >

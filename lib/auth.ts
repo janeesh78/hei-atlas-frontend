@@ -2,17 +2,23 @@
  * Auth + session client.
  *
  * - Token is stored in localStorage under TOKEN_KEY and sent as
- *   `Authorization: Bearer <token>` on protected calls.
+ *   `Authorization: Bearer <token>` on protected calls. localStorage (not
+ *   sessionStorage) is deliberate: a sign-in in one tab should sign in every
+ *   tab of the same browser — see session.tsx's `storage` listener.
  * - On boot the frontend calls `/auth/me` to hydrate the session. If the
  *   token is missing/expired the app redirects to /login.
- * - No refresh endpoint yet — sessions live for 24h. When the token expires
- *   the user re-verifies via OTP.
+ * - No refresh endpoint yet — the session itself slides forward on every
+ *   authed request (HIPAA §164.312(a)(2)(iii) inactivity timeout; see
+ *   SESSION_TTL server-side and IDLE_MS in session.tsx, which must match).
+ *   When the token expires the user re-verifies via OTP.
  */
 import { apiFetch } from './apiBase';
 import type { CodingReport } from './api';
 import type { CodingResult } from './coding';
 
-const TOKEN_KEY = 'oncology.authToken';
+// Exported so session.tsx can watch this key via the `storage` event and
+// pick up sign-in/sign-out that happened in another tab.
+export const TOKEN_KEY = 'oncology.authToken';
 const USER_KEY = 'oncology.currentUser';
 
 export interface CurrentUser {
