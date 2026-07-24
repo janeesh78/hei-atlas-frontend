@@ -946,6 +946,33 @@ function extractBiomarkerLine(note: OncologyNote): string {
   return extractBiomarkerLineFromText(corpus);
 }
 
+// Broader than BIOMARKER_WANTED on purpose: that dictionary is solid-tumor
+// gene names only (no myeloid/heme markers, no cytogenetics), used to build
+// a terse "EGFR | ALK"-style line. This vocabulary gates which SENTENCES
+// extractMolecularSentences() below treats as molecular content, so it also
+// covers heme markers (JAK2, MPL, SF3B1, ASXL1, TET2, DNMT3A, RUNX1, ATRX,
+// CALR) and cytogenetics notation (del(, inv(, t(, monosomy, trisomy,
+// karyotype) — a note whose only molecular mention is an MDS mutation panel
+// previously matched nothing here and rendered Molecular Profile empty.
+const MOLECULAR_VOCAB =
+  /\b(?:egfr|alk|ros1|braf|kras|nras|her2|msi|mmr|dmmr|pmmr|tmb|pd-?l1|brca[12]?|atm|palb2|chek2|ntrk|ret|met|fgfr\d?|idh[12]|flt3|npm1|jak2|calr|mpl|tp53|sf3b1|asxl1|tet2|dnmt3a|runx1|atrx|del\(|inv\(|t\(\d|monosomy|trisomy|karyotype|ngs|next[- ]generation|mutation\w*|mutated|wild[- ]?type|variant|amplif\w*|fusion|rearrang\w*|methylat\w*|exon\s*\d)\b/i;
+
+/**
+ * Full-detail fallback for when no labeled "Molecular Profile:" line exists.
+ * BIOMARKER_WANTED's join loses variant/VAF/cytogenetics detail entirely
+ * ("JAK2 V617F (2% VAF)" collapses to just "JAK2") — this instead returns
+ * the actual sentence(s) documenting molecular/cytogenetic findings verbatim
+ * from wherever the physician wrote them (typically HPI, not assessment).
+ */
+function extractMolecularSentences(note: OncologyNote): string {
+  const text = [note.history_present_illness, note.assessment].filter(Boolean).join(' ');
+  if (!text) return '';
+  return splitSentencesShielded(text)
+    .filter((s) => MOLECULAR_VOCAB.test(s))
+    .join(' ')
+    .trim();
+}
+
 /** Merge two "A | B | C" style biomarker lines, preserving order + deduping. */
 function mergeBiomarkerLines(a: string, b: string): string {
   const set = new Set<string>();
@@ -1068,10 +1095,12 @@ function buildFollowUpModel(
   // data. A mislabeled line in a pasted prior note once landed "The prostate
   // measures 5.5 x 4.3 x 3.4 cm" here, and the prior-note fallback carried
   // it forward on every visit (feedback 2026-07-09).
-  const MOLECULAR_VOCAB =
-    /\b(?:egfr|alk|ros1|braf|kras|nras|her2|msi|mmr|dmmr|pmmr|tmb|pd-?l1|brca[12]?|atm|palb2|chek2|ntrk|ret|met|fgfr\d?|idh[12]|flt3|npm1|jak2|calr|mpl|tp53|sf3b1|asxl1|tet2|dnmt3a|runx1|del\(|inv\(|t\(\d|monosomy|trisomy|karyotype|ngs|next[- ]generation|mutation|mutated|wild[- ]?type|variant|amplif\w*|fusion|rearrang\w*|methylat\w*|exon\s*\d)\b/i;
   const molProfile =
     molProfileRaw !== NOT_DOC && MOLECULAR_VOCAB.test(molProfileRaw) ? molProfileRaw : NOT_DOC;
+  // No explicit "Molecular Profile:" label — fall back to the actual
+  // sentence(s) documenting findings (variant/VAF/cytogenetics preserved),
+  // wherever in the note they were dictated.
+  const molecularSentences = extractMolecularSentences(note);
 
   // Biomarker line: union of biomarkers from current AND previous note so a
   // driver mutation documented last time still shows this time.
@@ -1165,7 +1194,9 @@ function buildFollowUpModel(
         { label: 'Biomarkers', value: biomarkerLine || NOT_DOC },
         // Molecular data is usually dictated as a biomarker ("KRAS G12C-
         // mutated") — mirror it here rather than showing Not documented.
-        { label: 'Molecular Profile', value: real(molProfile) || biomarkerLine || NOT_DOC },
+        // Prefer the full documented sentence (variant/VAF/cytogenetics)
+        // over the terse gene-name-only biomarker line when both exist.
+        { label: 'Molecular Profile', value: real(molProfile) || molecularSentences || biomarkerLine || NOT_DOC },
       ];
     })(),
     priorTherapyRaw: NOT_DOC,
