@@ -948,7 +948,7 @@ function extractBiomarkerLine(note: OncologyNote): string {
 
 // Broader than BIOMARKER_WANTED on purpose: that dictionary is solid-tumor
 // gene names only (no myeloid/heme markers, no cytogenetics), used to build
-// a terse "EGFR | ALK"-style line. This vocabulary gates which SENTENCES
+// a terse "EGFR | ALK"-style line. This vocabulary gates which CLAUSES
 // extractMolecularSentences() below treats as molecular content, so it also
 // covers heme markers (JAK2, MPL, SF3B1, ASXL1, TET2, DNMT3A, RUNX1, ATRX,
 // CALR) and cytogenetics notation (del(, inv(, t(, monosomy, trisomy,
@@ -957,20 +957,67 @@ function extractBiomarkerLine(note: OncologyNote): string {
 const MOLECULAR_VOCAB =
   /\b(?:egfr|alk|ros1|braf|kras|nras|her2|msi|mmr|dmmr|pmmr|tmb|pd-?l1|brca[12]?|atm|palb2|chek2|ntrk|ret|met|fgfr\d?|idh[12]|flt3|npm1|jak2|calr|mpl|tp53|sf3b1|asxl1|tet2|dnmt3a|runx1|atrx|del\(|inv\(|t\(\d|monosomy|trisomy|karyotype|ngs|next[- ]generation|mutation\w*|mutated|wild[- ]?type|variant|amplif\w*|fusion|rearrang\w*|methylat\w*|exon\s*\d)\b/i;
 
+// Morphologic/pathologic description terms (bone marrow biopsy cellularity,
+// lineage findings, dysplasia) — distinct from MOLECULAR_VOCAB so a compound
+// finding like "biopsy showed hypercellular marrow; NGS revealed FLT3
+// mutation" splits cleanly: the biopsy clause is histology, the NGS clause
+// is molecular, and neither vocabulary claims the other's clause.
+const HISTOLOGY_VOCAB =
+  /\b(?:biopsy|marrow|hypercellular|hypocellular|normocellular|cellularity|myelopoiesis|erythropoiesis|megakaryocyte\w*|dysplas\w*|blasts?)\b/i;
+
+/** Split into clauses at sentence boundaries AND semicolons — a compound
+ *  sentence mixing e.g. morphology + normal-cytogenetics + a molecular
+ *  finding needs clause-level filtering, not whole-sentence, or an
+ *  unrelated clause tags along just because it shares a sentence with a
+ *  vocabulary match. */
+function splitClausesShielded(text: string): string[] {
+  return splitSentencesShielded(text).flatMap((s) =>
+    s.split(';').map((c) => c.trim()).filter(Boolean)
+  );
+}
+
+/**
+ * Clauses matching `vocab`, preferring assessment over HPI — matching the
+ * existing labeled-line extraction's precedence elsewhere in this function
+ * — so a finding documented in both (HPI narrates the workup, assessment
+ * restates it tersely) surfaces once, not as a concatenated near-duplicate
+ * (feedback 2026-07-24: Molecular Profile showed the same NGS finding
+ * twice, worded slightly differently, because HPI + assessment matches
+ * were both kept).
+ */
+function extractClausesPreferringAssessment(note: OncologyNote, vocab: RegExp): string {
+  const fromAssessment = note.assessment
+    ? splitClausesShielded(note.assessment).filter((c) => vocab.test(c))
+    : [];
+  if (fromAssessment.length) return fromAssessment.join('; ');
+  const fromHpi = note.history_present_illness
+    ? splitClausesShielded(note.history_present_illness).filter((c) => vocab.test(c))
+    : [];
+  return fromHpi.join('; ');
+}
+
 /**
  * Full-detail fallback for when no labeled "Molecular Profile:" line exists.
  * BIOMARKER_WANTED's join loses variant/VAF/cytogenetics detail entirely
  * ("JAK2 V617F (2% VAF)" collapses to just "JAK2") — this instead returns
- * the actual sentence(s) documenting molecular/cytogenetic findings verbatim
- * from wherever the physician wrote them (typically HPI, not assessment).
+ * the actual clause(s) documenting molecular/cytogenetic findings verbatim
+ * from wherever the physician wrote them, excluding non-molecular clauses
+ * (biopsy morphology, "cytogenetics normal") that merely shared a sentence
+ * with the finding.
  */
 function extractMolecularSentences(note: OncologyNote): string {
-  const text = [note.history_present_illness, note.assessment].filter(Boolean).join(' ');
-  if (!text) return '';
-  return splitSentencesShielded(text)
-    .filter((s) => MOLECULAR_VOCAB.test(s))
-    .join(' ')
-    .trim();
+  return extractClausesPreferringAssessment(note, MOLECULAR_VOCAB);
+}
+
+/**
+ * Morphologic/pathologic clause(s) (bone marrow biopsy cellularity, lineage
+ * findings, etc.) — fills Histology when there's no confirmed tumor
+ * histology type to fall back to (e.g. an undiagnosed pancytopenia workup),
+ * so the actual biopsy findings aren't dropped just because there's no
+ * named histologic diagnosis yet.
+ */
+function extractHistologyClauses(note: OncologyNote): string {
+  return extractClausesPreferringAssessment(note, HISTOLOGY_VOCAB);
 }
 
 /** Merge two "A | B | C" style biomarker lines, preserving order + deduping. */
@@ -1072,6 +1119,10 @@ function buildFollowUpModel(
     'Histology',
     'Type',
   );
+  // Biopsy morphology clause, appended to whatever Histology text is found —
+  // most useful for a pre-diagnosis workup (no named histologic type yet),
+  // where the biopsy findings ARE the closest thing to "histology" so far.
+  const histologyMorphology = extractHistologyClauses(note);
   const primarySite = fallback(
     extractLabeled(note.assessment + '\n' + note.cancer_type, 'Primary Site', 'Site'),
     'Primary Site',
@@ -1188,7 +1239,11 @@ function buildFollowUpModel(
       // (feedback 2026-07-10). Treat NOT_DOC as empty before falling back.
       const real = (v: string) => (v && v !== NOT_DOC ? v : '');
       return [
-        { label: 'Histology', value: real(histology) || histologyGuess || (has(note.cancer_type) ? note.cancer_type!.split(',')[0].trim() : NOT_DOC) },
+        { label: 'Histology', value: (() => {
+          const base = real(histology) || histologyGuess || (has(note.cancer_type) ? note.cancer_type!.split(',')[0].trim() : '');
+          if (!base) return histologyMorphology || NOT_DOC;
+          return histologyMorphology ? `${base.replace(/[.\s]+$/, '')}. ${histologyMorphology}` : base;
+        })() },
         { label: 'Primary Site', value: real(primarySite) || siteGuess || NOT_DOC },
         { label: 'Stage', value: real(stage) || NOT_DOC },
         { label: 'Biomarkers', value: biomarkerLine || NOT_DOC },
