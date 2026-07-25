@@ -104,12 +104,25 @@ function randomId(): string {
   return 'idk-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
+// A DNS/firewall block is often a silent packet DROP, not an active reject —
+// the connection just hangs until the OS/browser's own TCP timeout, which can
+// run well past a minute. Without a bound here, that hang happens on the
+// FIRST candidate, before the walk ever reaches the `/backend` proxy that
+// would have worked — indistinguishable from the app being broken (feedback
+// 2026-07-25: "unable to login from hospital computer" — Union Hospital
+// Terre Haute; the request had "failed or hung", no error ever surfaced).
+// 8s comfortably covers a real round trip; it's not meant to be generous to
+// a slow-but-working connection at the cost of leaving a blocked one hanging.
+const ATTEMPT_TIMEOUT_MS = 8000;
+
 /**
  * fetch() that fails over across API bases on network-level errors (DNS block,
  * TLS interception, offline) AND on non-API (HTML) responses. Real HTTP errors
  * — 4xx/5xx with a JSON body — mean the server was reached and are returned to
- * the caller unchanged. AbortError is the caller's cancellation and is
- * rethrown immediately.
+ * the caller unchanged. Each attempt is bounded by ATTEMPT_TIMEOUT_MS so a
+ * hung connection fails fast onto the next base rather than stalling the
+ * whole walk; the caller's own cancellation (their `init.signal`, if any)
+ * still aborts the entire call immediately, same as before.
  *
  * For non-idempotent methods a single Idempotency-Key is generated per call
  * and reused across every base attempt, so a request that was received but
@@ -129,8 +142,11 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   let lastErr: unknown = null;
   let htmlRes: Response | null = null;
   for (const base of candidateBases()) {
+    const timeoutCtrl = new AbortController();
+    const timer = setTimeout(() => timeoutCtrl.abort(), ATTEMPT_TIMEOUT_MS);
+    const signal = init.signal ? AbortSignal.any([init.signal, timeoutCtrl.signal]) : timeoutCtrl.signal;
     try {
-      const res = await fetch(`${base}${path}`, effInit);
+      const res = await fetch(`${base}${path}`, { ...effInit, signal });
       if (looksLikeNonApi(res)) {
         // Not our backend — remember it but keep walking.
         htmlRes = res;
@@ -139,8 +155,15 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
       pin(base);
       return res;
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') throw err;
+      // Only the CALLER's own cancellation should abort the whole walk. Our
+      // internal per-attempt timeout also throws AbortError, but that just
+      // means "try the next base" — same as any other network failure.
+      if (err instanceof DOMException && err.name === 'AbortError' && init.signal?.aborted) {
+        throw err;
+      }
       lastErr = err;
+    } finally {
+      clearTimeout(timer);
     }
   }
   // Every base failed or returned a non-API page. Prefer a network error
