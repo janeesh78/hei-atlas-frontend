@@ -52,6 +52,25 @@ function pin(base: string): void {
   }
 }
 
+/**
+ * Drop a pinned base so the next apiFetch call re-walks every candidate from
+ * scratch. Intended for a user-initiated forced retry (e.g. "Retry now" on a
+ * stuck upload) — a pin earned on an earlier bad network (or a false-start
+ * mid-session) shouldn't keep quietly routing every later attempt through
+ * `/backend` if direct connectivity has since recovered, or if the proxy
+ * relay itself is what's rejecting a large request. Costs at most one extra
+ * timeout on the retry that calls this; apiFetch re-pins whatever actually
+ * succeeds.
+ */
+export function clearPinnedBase(): void {
+  memPinned = null;
+  try {
+    if (typeof window !== 'undefined') window.sessionStorage.removeItem(PINNED_KEY);
+  } catch {
+    /* nothing persisted to clear */
+  }
+}
+
 function candidateBases(): string[] {
   const bases = [PRIMARY];
   // Fallbacks only exist in production browser builds — in dev a dead
