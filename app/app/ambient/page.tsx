@@ -81,11 +81,24 @@ export default function Home() {
   // log trace — traced to exactly this: the upload had already failed and
   // been parked, but nothing ever told the UI).
   const activeQueueUploadIdRef = useRef<string | null>(null);
-  // Mirrors `loading` state for the same mount-only-effect staleness reason
-  // as pipelineRef/genCtxRef above — the queue's onSuccess callback (below)
-  // needs to know whether a generation is ALREADY running RIGHT NOW, and a
-  // closure over `loading` state would only ever see its value from mount.
-  const loadingRef = useRef(false);
+  // True exactly while runPipelineFromTranscript (note generation or trial
+  // search) is actually executing — set/cleared directly by that function,
+  // not mirrored from `loading` state. The queue's onSuccess callback below
+  // needs to know whether a generation is GENUINELY running concurrently
+  // right now, which is a different question from whether `loading` is true:
+  // the queue path also sets `loading` true optimistically the moment a
+  // recording is enqueued (to show "Transcribing audio…"), well before any
+  // pipeline call exists to race — a naive check against `loading` itself
+  // (or a ref mirroring it) is true in BOTH cases and can't tell them apart.
+  // That conflation meant onSuccess's fire() saw its own recording's still-
+  // true optimistic flag, concluded a different generation was already
+  // running, and deferred forever waiting for a poll condition nothing ever
+  // clears — transcription would succeed server-side (confirmed via backend
+  // logs) but the note pipeline would never start, leaving the UI stuck on
+  // "Transcribing audio…" indefinitely (feedback 2026-07-26: "new encounter
+  // audio transcriptions is stuck", right after a clean transcription
+  // success with no further backend activity at all).
+  const pipelineRunningRef = useRef(false);
   const queueFireWaitRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [pendingUploads, setPendingUploads] = useState<PendingRecording[]>([]);
   // Must default to `true` unconditionally (not `navigator.onLine`) so the
@@ -502,17 +515,24 @@ export default function Home() {
     }
     if (ctx && ctx.outputFormat !== outputFormat) setOutputFormat(ctx.outputFormat);
 
-    const classification = classifyQuery(text);
-    setCurrentIntent(classification.intent);
-    console.log('[intent]', classification.intent, '[disease]', classification.disease);
+    // Marks the window a real generation is in flight — see pipelineRunningRef's
+    // declaration for why this must be distinct from `loading`.
+    pipelineRunningRef.current = true;
+    try {
+      const classification = classifyQuery(text);
+      setCurrentIntent(classification.intent);
+      console.log('[intent]', classification.intent, '[disease]', classification.disease);
 
-    if (classification.intent === 'clinical_trial_search') {
-      // Skip note + CDS — go straight to trials
-      setNearbyLoading(true);
-      await runTrialSearchPipeline(text, classification.disease);
-      setNearbyLoading(false);
-    } else {
-      await runNotePipeline(text, ctx);
+      if (classification.intent === 'clinical_trial_search') {
+        // Skip note + CDS — go straight to trials
+        setNearbyLoading(true);
+        await runTrialSearchPipeline(text, classification.disease);
+        setNearbyLoading(false);
+      } else {
+        await runNotePipeline(text, ctx);
+      }
+    } finally {
+      pipelineRunningRef.current = false;
     }
   };
 
@@ -521,7 +541,6 @@ export default function Home() {
   // patient context (see the refs' declaration).
   pipelineRef.current = runPipelineFromTranscript;
   genCtxRef.current = { previousNote: previousNote.trim(), outputFormat };
-  loadingRef.current = loading;
 
   const runFromText = async (query: string) => {
     resetResults();
@@ -1135,7 +1154,7 @@ export default function Home() {
         pipelineRef.current(transcript, ctx);
       };
 
-      if (loadingRef.current) {
+      if (pipelineRunningRef.current) {
         // A generation is already running — often the physician manually
         // retrying because /notes/generate legitimately takes 30-90s+ and
         // felt stuck (feedback 2026-07-26: "retrying the current note").
@@ -1146,7 +1165,7 @@ export default function Home() {
         // urgency to fire this exact instant.
         if (queueFireWaitRef.current) clearInterval(queueFireWaitRef.current);
         queueFireWaitRef.current = setInterval(() => {
-          if (!loadingRef.current) {
+          if (!pipelineRunningRef.current) {
             if (queueFireWaitRef.current) clearInterval(queueFireWaitRef.current);
             queueFireWaitRef.current = null;
             fire();
