@@ -70,6 +70,12 @@ export default function Home() {
   const pendingCtxByIdRef = useRef<Map<string, { previousNote: string; outputFormat: OutputFormat }>>(
     new Map(),
   );
+  // Mirrors `loading` state for the same mount-only-effect staleness reason
+  // as pipelineRef/genCtxRef above — the queue's onSuccess callback (below)
+  // needs to know whether a generation is ALREADY running RIGHT NOW, and a
+  // closure over `loading` state would only ever see its value from mount.
+  const loadingRef = useRef(false);
+  const queueFireWaitRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [pendingUploads, setPendingUploads] = useState<PendingRecording[]>([]);
   // Must default to `true` unconditionally (not `navigator.onLine`) so the
   // SSR-rendered HTML matches the initial client render. The real value is
@@ -319,9 +325,19 @@ export default function Home() {
     const fmt = ctx ? ctx.outputFormat : outputFormat;
     const prev = ctx ? ctx.previousNote : previousNote;
     // Estimate latency from transcript size so the user knows what to expect.
-    // Empirically the backend's note generator runs at ~5 KB/sec.
+    // /notes/generate is synchronous end-to-end (the backend waits for
+    // Claude to finish the entire ~15-field structured note before
+    // responding at all, no streaming to the client) — that output-side
+    // cost dominates for anything but a very long transcript, so even a
+    // short one has a large fixed floor. A 1.6KB transcript reliably took
+    // 30-40s in production (feedback 2026-07-26: "retrying the current
+    // note" — the old 8s floor was so far off that physicians reasonably
+    // concluded generation had stalled and retried while the original call
+    // was still in flight, running two concurrent generations for one
+    // encounter). 35s is a floor, not a ceiling — a long transcript still
+    // scales up from there.
     const sizeKB = Math.round(text.length / 1024);
-    const expectedSec = Math.max(8, Math.round(text.length / 200));
+    const expectedSec = Math.max(35, Math.round(text.length / 200));
     const noteStart = Date.now();
     setLoadingStage(
       sizeKB > 5
@@ -494,6 +510,7 @@ export default function Home() {
   // patient context (see the refs' declaration).
   pipelineRef.current = runPipelineFromTranscript;
   genCtxRef.current = { previousNote: previousNote.trim(), outputFormat };
+  loadingRef.current = loading;
 
   const runFromText = async (query: string) => {
     resetResults();
@@ -1074,13 +1091,37 @@ export default function Home() {
         pendingCtxByIdRef.current.get(item.id) ??
         { previousNote: '', outputFormat: genCtxRef.current.outputFormat };
       pendingCtxByIdRef.current.delete(item.id);
-      resetResults();
-      setPreviousNote('');
-      lastMergedPreviousRef.current = ctx.previousNote.trim();
-      setTranscript(transcript);
-      setLoading(true);
-      // pipelineRef is always the current pipeline fn (live settings).
-      pipelineRef.current(transcript, ctx);
+
+      const fire = () => {
+        resetResults();
+        setPreviousNote('');
+        lastMergedPreviousRef.current = ctx.previousNote.trim();
+        setTranscript(transcript);
+        setLoading(true);
+        // pipelineRef is always the current pipeline fn (live settings).
+        pipelineRef.current(transcript, ctx);
+      };
+
+      if (loadingRef.current) {
+        // A generation is already running — often the physician manually
+        // retrying because /notes/generate legitimately takes 30-90s+ and
+        // felt stuck (feedback 2026-07-26: "retrying the current note").
+        // Firing this queued item on top of that would run two concurrent
+        // /notes/generate calls and race whichever finishes last into
+        // clobbering the note state. Wait for the in-flight one to finish
+        // instead of racing it — the transcript already uploaded fine, no
+        // urgency to fire this exact instant.
+        if (queueFireWaitRef.current) clearInterval(queueFireWaitRef.current);
+        queueFireWaitRef.current = setInterval(() => {
+          if (!loadingRef.current) {
+            if (queueFireWaitRef.current) clearInterval(queueFireWaitRef.current);
+            queueFireWaitRef.current = null;
+            fire();
+          }
+        }, 1000);
+      } else {
+        fire();
+      }
     });
     q.init();
     // Standby recovery: if a previous session saved a draft (device slept and
@@ -1100,6 +1141,10 @@ export default function Home() {
       offSuccess();
       q.destroy();
       queueRef.current = null;
+      if (queueFireWaitRef.current) {
+        clearInterval(queueFireWaitRef.current);
+        queueFireWaitRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
