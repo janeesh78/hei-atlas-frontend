@@ -113,23 +113,42 @@ function randomId(): string {
 // Terre Haute; the request had "failed or hung", no error ever surfaced).
 // 8s comfortably covers a real round trip; it's not meant to be generous to
 // a slow-but-working connection at the cost of leaving a blocked one hanging.
+//
+// This default is wrong for endpoints that are themselves slow by nature —
+// /notes/generate is a single synchronous call that waits for Claude to
+// finish the ENTIRE note server-side before responding at all (no
+// streaming to the client), routinely 30-90s+. Feedback 2026-07-26: "notes
+// not uploading" traced to exactly this — the fe-ping telemetry showed
+// three separate pipeline:note-start events for the same transcript but
+// only one eventual /notes/generate 200, ~52s after the first start, i.e.
+// the 8s default was aborting a call that was working, just slow, and the
+// physician kept retrying what looked like a hang. Callers of a
+// known-slow endpoint MUST pass a longer timeoutMs explicitly — the
+// default here stays short, because it's right for every other endpoint.
 const ATTEMPT_TIMEOUT_MS = 8000;
 
 /**
  * fetch() that fails over across API bases on network-level errors (DNS block,
  * TLS interception, offline) AND on non-API (HTML) responses. Real HTTP errors
  * — 4xx/5xx with a JSON body — mean the server was reached and are returned to
- * the caller unchanged. Each attempt is bounded by ATTEMPT_TIMEOUT_MS so a
- * hung connection fails fast onto the next base rather than stalling the
- * whole walk; the caller's own cancellation (their `init.signal`, if any)
- * still aborts the entire call immediately, same as before.
+ * the caller unchanged. Each attempt is bounded by `timeoutMs` (default
+ * ATTEMPT_TIMEOUT_MS) so a hung connection fails fast onto the next base
+ * rather than stalling the whole walk; the caller's own cancellation (their
+ * `init.signal`, if any) still aborts the entire call immediately, same as
+ * before. Pass a longer `timeoutMs` for endpoints that are legitimately slow
+ * (see ATTEMPT_TIMEOUT_MS's comment) — this is a per-attempt bound, not a
+ * per-call one, so it applies the same to every base in the walk.
  *
  * For non-idempotent methods a single Idempotency-Key is generated per call
  * and reused across every base attempt, so a request that was received but
  * whose response was lost (connection reset after the server committed it)
  * can be de-duplicated server-side instead of creating a duplicate row.
  */
-export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function apiFetch(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs: number = ATTEMPT_TIMEOUT_MS,
+): Promise<Response> {
   const method = (init.method || 'GET').toUpperCase();
   const mutating = method !== 'GET' && method !== 'HEAD';
   let effInit = init;
@@ -143,7 +162,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   let htmlRes: Response | null = null;
   for (const base of candidateBases()) {
     const timeoutCtrl = new AbortController();
-    const timer = setTimeout(() => timeoutCtrl.abort(), ATTEMPT_TIMEOUT_MS);
+    const timer = setTimeout(() => timeoutCtrl.abort(), timeoutMs);
     const signal = init.signal ? AbortSignal.any([init.signal, timeoutCtrl.signal]) : timeoutCtrl.signal;
     try {
       const res = await fetch(`${base}${path}`, { ...effInit, signal });

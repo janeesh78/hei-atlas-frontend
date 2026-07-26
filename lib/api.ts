@@ -2,6 +2,14 @@
 import { apiFetch } from './apiBase';
 import { authHeaders } from './auth';
 
+// /notes/generate is synchronous end-to-end: the backend waits for Claude to
+// finish the entire note before responding at all (no streaming to the
+// client), routinely 30-90s+. apiFetch's default per-attempt timeout (8s) is
+// sized for normal endpoints and was aborting this one mid-generation,
+// surfacing as "notes not uploading" (feedback 2026-07-26) even though the
+// call was working, just slow.
+const NOTE_GENERATION_TIMEOUT_MS = 120_000;
+
 /**
  * Fire-and-forget telemetry ping to the backend. Used to track frontend
  * pipeline progress in the backend log so we can diagnose silent stalls
@@ -178,16 +186,20 @@ export async function generateNote(
 ): Promise<NoteGenerationResponse> {
   const { transcript, outputFormat = 'Consultation', previousNote, codingEnabled } = options;
 
-  const res = await apiFetch(`/notes/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({
-      transcript,
-      output_format: outputFormat,
-      previous_note: previousNote?.trim() || undefined,
-      coding_enabled: !!codingEnabled,
-    }),
-  });
+  const res = await apiFetch(
+    `/notes/generate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        transcript,
+        output_format: outputFormat,
+        previous_note: previousNote?.trim() || undefined,
+        coding_enabled: !!codingEnabled,
+      }),
+    },
+    NOTE_GENERATION_TIMEOUT_MS,
+  );
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
