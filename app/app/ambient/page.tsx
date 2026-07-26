@@ -70,6 +70,17 @@ export default function Home() {
   const pendingCtxByIdRef = useRef<Map<string, { previousNote: string; outputFormat: OutputFormat }>>(
     new Map(),
   );
+  // Id of the queued recording the CURRENT "Transcribing audio…" loading
+  // state was optimistically set for (queue path only — see the onstop
+  // handler). The queue retries silently in the background; if this specific
+  // recording is ever marked `terminal` (non-retryable 4xx — see
+  // recordingQueue.ts), the queue's onChange handler below uses this id to
+  // notice and correct the stale spinner instead of leaving it spinning
+  // forever with no indication anything failed (feedback 2026-07-26: a
+  // recording stuck "Transcribing audio…" past 5 minutes with zero backend
+  // log trace — traced to exactly this: the upload had already failed and
+  // been parked, but nothing ever told the UI).
+  const activeQueueUploadIdRef = useRef<string | null>(null);
   // Mirrors `loading` state for the same mount-only-effect staleness reason
   // as pipelineRef/genCtxRef above — the queue's onSuccess callback (below)
   // needs to know whether a generation is ALREADY running RIGHT NOW, and a
@@ -659,6 +670,7 @@ export default function Home() {
             // has moved on) it reconciles against THIS patient's prior note and
             // format — never a note pasted later for someone else.
             pendingCtxByIdRef.current.set(rec.id, { ...genCtxRef.current });
+            activeQueueUploadIdRef.current = rec.id;
             // Show "transcribing..." loading state right away — the queue's
             // onSuccess callback drives the rest of the pipeline.
             resetResults();
@@ -1071,7 +1083,28 @@ export default function Home() {
     if (typeof window === 'undefined') return;
     const q = new RecordingQueue((blob) => transcribeAudioSafe(blob));
     queueRef.current = q;
-    const offChange = q.onChange((items) => setPendingUploads(items));
+    const offChange = q.onChange((items) => {
+      setPendingUploads(items);
+      // Reconcile the optimistic "Transcribing audio…" state (set once, on
+      // enqueue) against reality: if THIS specific recording has since been
+      // marked terminal (queue gave up after a non-retryable 4xx — see
+      // recordingQueue.ts), the spinner is now lying. Correct it via the
+      // same error-display path the direct-upload path already uses, rather
+      // than leaving a physician staring at a "Transcribing…" message for a
+      // recording that failed minutes ago and will never finish.
+      const activeId = activeQueueUploadIdRef.current;
+      if (!activeId) return;
+      const active = items.find((i) => i.id === activeId);
+      if (active?.terminal) {
+        activeQueueUploadIdRef.current = null;
+        setLoading(false);
+        setLoadingStage('');
+        setError(
+          `Recording upload failed and won't retry automatically (${active.lastError || 'upload rejected'}). ` +
+            'The audio is still saved on this device — open the upload queue (top right) to retry or discard it.',
+        );
+      }
+    });
     const offSuccess = q.onSuccess((item, transcript) => {
       // A queued recording finally uploaded — run the rest of the pipeline
       // (note generation, CTCAE, coding, citations) as if it had just landed.
@@ -1641,6 +1674,7 @@ export default function Home() {
               <NetworkPill
                 online={networkOnline}
                 pendingCount={pendingUploads.length}
+                hasFailed={pendingUploads.some((i) => i.terminal)}
                 onClick={() => setUploadsPanelOpen(true)}
               />
               <Toggle
@@ -2030,30 +2064,40 @@ export default function Home() {
 
 // Inline toggle component used in the workspace header
 // Network + queue status pill — shown in the workspace header. Reflects:
-//   ● green "Online"           — live, queue empty
+//   ● rose  "Needs attention"   — a queued recording failed permanently
+//                                 (non-retryable 4xx) and is parked
+//   ● green "Online"            — live, queue empty
 //   ● amber "Online · N saved"  — live, N recordings still uploading
 //   ● gray  "Offline · N saved" — no network, recordings safely persisted
 //   ● gray  "Offline"           — no network, no queued work
 function NetworkPill({
   online,
   pendingCount,
+  hasFailed,
   onClick,
 }: {
   online: boolean;
   pendingCount: number;
+  hasFailed?: boolean;
   onClick?: () => void;
 }) {
-  const cls = !online
+  const cls = hasFailed
+    ? 'bg-rose-50 text-rose-700 border-rose-200'
+    : !online
     ? 'bg-slate-100 text-slate-700 border-slate-200'
     : pendingCount > 0
     ? 'bg-amber-50 text-amber-700 border-amber-200'
     : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  const dot = !online
+  const dot = hasFailed
+    ? 'bg-rose-500 animate-pulse'
+    : !online
     ? 'bg-slate-500'
     : pendingCount > 0
     ? 'bg-amber-500 animate-pulse'
     : 'bg-emerald-500';
-  const label = !online
+  const label = hasFailed
+    ? `Needs attention · ${pendingCount} queued`
+    : !online
     ? pendingCount > 0
       ? `Offline · ${pendingCount} saved`
       : 'Offline'
@@ -2069,7 +2113,9 @@ function NetworkPill({
         onClick ? 'hover:brightness-95 cursor-pointer' : ''
       }`}
       title={
-        online
+        hasFailed
+          ? 'A recording failed to upload and will not retry automatically — tap to retry or discard.'
+          : online
           ? pendingCount > 0
             ? 'Recordings are uploading in the background — tap to view queue.'
             : 'Live connection to the backend.'
