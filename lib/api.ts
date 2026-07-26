@@ -10,6 +10,20 @@ import { authHeaders } from './auth';
 // call was working, just slow.
 const NOTE_GENERATION_TIMEOUT_MS = 120_000;
 
+// /transcription/ uploads the raw audio (can be several MB) and waits for
+// Whisper to finish before responding — same shape of problem as
+// /notes/generate, worse consequence: the recording queue already treats an
+// aborted attempt as retryable (see transcribeAudioSafe), so an 8s timeout
+// on a large/long recording doesn't just fail once, it fails EVERY attempt
+// forever, retrying an upload that can never finish in time. Confirmed
+// directly: a 390s/6.0MB recording stuck at 23 attempts over 43 minutes,
+// every attempt's error the literal default AbortController message
+// ("signal is aborted without reason") — this timeout firing every time.
+// Generous on purpose — audio is irreplaceable clinical data; a slow
+// attempt that eventually succeeds is fine, an attempt that can never
+// succeed is not.
+const TRANSCRIPTION_TIMEOUT_MS = 300_000;
+
 /**
  * Fire-and-forget telemetry ping to the backend. Used to track frontend
  * pipeline progress in the backend log so we can diagnose silent stalls
@@ -139,11 +153,15 @@ export async function transcribeAudio(audioBlob: Blob): Promise<TranscribeRespon
   const ext = (audioBlob.type.split('/')[1] || 'webm').split(';')[0];
   formData.append('audio', audioBlob, `recording.${ext}`);
 
-  const res = await apiFetch(`/transcription/`, {
-    method: 'POST',
-    headers: authHeaders(), // no Content-Type — the browser sets the multipart boundary
-    body: formData,
-  });
+  const res = await apiFetch(
+    `/transcription/`,
+    {
+      method: 'POST',
+      headers: authHeaders(), // no Content-Type — the browser sets the multipart boundary
+      body: formData,
+    },
+    TRANSCRIPTION_TIMEOUT_MS,
+  );
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
