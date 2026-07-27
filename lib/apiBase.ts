@@ -32,10 +32,19 @@ const PROXY = '/backend';
 // again and we want the direct path, not the Vercel relay, for uploads.
 const PINNED_KEY = 'oncology.apiBase';
 
-let memPinned: string | null = null;
+// `undefined` = not yet consulted this module load (fall back to
+// sessionStorage — a pin set earlier in the same tab must still be honored
+// after a navigation). `null` = explicitly cleared via clearPinnedBase() —
+// never fall back to storage from here, even if that call's own storage
+// write failed; a string = an active in-memory pin. Without this
+// distinction, `if (memPinned) return memPinned;` alone can't tell "never
+// checked" apart from "explicitly cleared," so a clear whose sessionStorage
+// write throws silently resurrects the stale value on the next read.
+let memPinned: string | null | undefined = undefined;
 
 function readPinned(): string | null {
   if (memPinned) return memPinned;
+  if (memPinned === null) return null;
   try {
     return typeof window !== 'undefined' ? window.sessionStorage.getItem(PINNED_KEY) : null;
   } catch {
@@ -63,11 +72,16 @@ function pin(base: string): void {
  * succeeds.
  */
 export function clearPinnedBase(): void {
+  // memPinned=null is authoritative on its own (see its declaration) — the
+  // sessionStorage write below is best-effort cleanup, not load-bearing. If
+  // it throws (a storage-mutator shim, a partitioned/private context that
+  // still permits reads), readPinned() still correctly returns null rather
+  // than resurrecting the stale persisted value.
   memPinned = null;
   try {
     if (typeof window !== 'undefined') window.sessionStorage.removeItem(PINNED_KEY);
   } catch {
-    /* nothing persisted to clear */
+    /* memPinned=null already makes readPinned() ignore storage entirely */
   }
 }
 
