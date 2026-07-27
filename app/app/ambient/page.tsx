@@ -71,17 +71,25 @@ export default function Home() {
   const pendingCtxByIdRef = useRef<Map<string, { previousNote: string; outputFormat: OutputFormat }>>(
     new Map(),
   );
-  // Id of the queued recording the CURRENT "Transcribing audio…" loading
-  // state was optimistically set for (queue path only — see the onstop
-  // handler). The queue retries silently in the background; if this specific
-  // recording is ever marked `terminal` (non-retryable 4xx — see
-  // recordingQueue.ts), the queue's onChange handler below uses this id to
-  // notice and correct the stale spinner instead of leaving it spinning
-  // forever with no indication anything failed (feedback 2026-07-26: a
-  // recording stuck "Transcribing audio…" past 5 minutes with zero backend
-  // log trace — traced to exactly this: the upload had already failed and
-  // been parked, but nothing ever told the UI).
-  const activeQueueUploadIdRef = useRef<string | null>(null);
+  // Ids of every queued recording that might still need its terminal
+  // failure corrected onto the main "Transcribing audio…" loading/error UI
+  // (queue path only — see the onstop handler and the standby-draft
+  // recovery below, both of which add to this set). The queue retries
+  // silently in the background; if one of these is ever marked `terminal`
+  // (non-retryable 4xx — see recordingQueue.ts), the queue's onChange
+  // handler uses this set to notice and correct the stale spinner instead
+  // of leaving it spinning forever with no indication anything failed
+  // (feedback 2026-07-26: a recording stuck "Transcribing audio…" past 5
+  // minutes with zero backend log trace — traced to exactly this: the
+  // upload had already failed and been parked, but nothing ever told the
+  // UI). A single id here (as this used to be) meant only the
+  // most-recently-enqueued recording was ever checked — an earlier still-
+  // pending recording (e.g. one recovered from a prior killed session, or
+  // simply enqueued before a second recording started) could fail
+  // terminally with its inline correction silently skipped, visible only
+  // via the pending-uploads pill/panel rather than the main workspace
+  // (code review finding, 2026-07-26).
+  const activeQueueUploadIdsRef = useRef<Set<string>>(new Set());
   // True exactly while runPipelineFromTranscript (note generation or trial
   // search) is actually executing — set/cleared directly by that function,
   // not mirrored from `loading` state. The queue's onSuccess callback below
@@ -111,10 +119,14 @@ export default function Home() {
   // concurrently into each other exactly as pipelineRunningRef intends.
   const pendingFiresRef = useRef<Array<() => void>>([]);
   const queueFireWaitRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Single-slot deferral for the terminal-upload error correction below —
-  // deliberately separate from queueFireWaitRef (a second, unrelated deferred
-  // action sharing that slot would recreate the exact single-slot-clobbering
-  // bug this ref exists to avoid).
+  // Queued terminal-upload error corrections deferred because a different
+  // operation was running when they were detected (see the onChange
+  // handler below) — a FIFO, not a single slot, for the same reason
+  // pendingFiresRef is: a second terminal recording detected before the
+  // first one's correction applies must not clobber it. Deliberately
+  // separate from pendingFiresRef/queueFireWaitRef (a shared slot between
+  // two unrelated deferred actions would recreate that exact bug).
+  const pendingTerminalCorrectionsRef = useRef<Array<() => void>>([]);
   const terminalReconcileWaitRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [pendingUploads, setPendingUploads] = useState<PendingRecording[]>([]);
   // Must default to `true` unconditionally (not `navigator.onLine`) so the
@@ -711,7 +723,7 @@ export default function Home() {
             // has moved on) it reconciles against THIS patient's prior note and
             // format — never a note pasted later for someone else.
             pendingCtxByIdRef.current.set(rec.id, { ...genCtxRef.current });
-            activeQueueUploadIdRef.current = rec.id;
+            activeQueueUploadIdsRef.current.add(rec.id);
             // Show "transcribing..." loading state right away — the queue's
             // onSuccess callback drives the rest of the pipeline.
             resetResults();
@@ -1141,24 +1153,25 @@ export default function Home() {
     queueRef.current = q;
     const offChange = q.onChange((items) => {
       setPendingUploads(items);
-      // Reconcile the optimistic "Transcribing audio…" state (set once, on
-      // enqueue) against reality: if THIS specific recording has since been
-      // marked terminal (queue gave up after a non-retryable 4xx — see
-      // recordingQueue.ts), the spinner is now lying. Correct it via the
-      // same error-display path the direct-upload path already uses, rather
-      // than leaving a physician staring at a "Transcribing…" message for a
-      // recording that failed minutes ago and will never finish.
-      const activeId = activeQueueUploadIdRef.current;
-      if (!activeId) return;
-      const active = items.find((i) => i.id === activeId);
-      if (!active?.terminal) return;
+      // Reconcile the optimistic "Transcribing audio…" state (set on
+      // enqueue, possibly for an EARLIER recording than the one currently
+      // on screen) if any tracked recording has since been marked terminal
+      // (queue gave up after a non-retryable 4xx — see recordingQueue.ts).
+      // Checking the whole tracked set — not just the most-recently-
+      // enqueued id — means an earlier recording's terminal failure still
+      // gets corrected even after a later one has been enqueued (code
+      // review finding, 2026-07-26).
+      const terminalItem = items.find(
+        (i) => activeQueueUploadIdsRef.current.has(i.id) && i.terminal,
+      );
+      if (!terminalItem) return;
+      activeQueueUploadIdsRef.current.delete(terminalItem.id);
 
       const applyTerminalError = () => {
-        activeQueueUploadIdRef.current = null;
         setLoading(false);
         setLoadingStage('');
         setError(
-          `Recording upload failed and won't retry automatically (${active.lastError || 'upload rejected'}). ` +
+          `Recording upload failed and won't retry automatically (${terminalItem.lastError || 'upload rejected'}). ` +
             'The audio is still saved on this device — open the upload queue (top right) to retry or discard it.',
         );
       };
@@ -1170,22 +1183,27 @@ export default function Home() {
         // loadingStage/error — clobbering it to report THIS recording's
         // failure would tear down real, in-progress work and leave a
         // misattributed error on screen (nothing on the success path clears
-        // `error`). Defer, same pattern as the queue's own fire() guard, and
-        // re-check the tracked id is still this one before applying — a
-        // newer recording may have taken over the slot while we waited.
-        if (terminalReconcileWaitRef.current) clearInterval(terminalReconcileWaitRef.current);
-        terminalReconcileWaitRef.current = setInterval(() => {
-          if (activeQueueUploadIdRef.current !== activeId) {
-            if (terminalReconcileWaitRef.current) clearInterval(terminalReconcileWaitRef.current);
-            terminalReconcileWaitRef.current = null;
-            return;
-          }
-          if (!pipelineRunningRef.current) {
-            if (terminalReconcileWaitRef.current) clearInterval(terminalReconcileWaitRef.current);
-            terminalReconcileWaitRef.current = null;
-            applyTerminalError();
-          }
-        }, 1000);
+        // `error`). Queue the correction rather than deferring it in a
+        // single slot — a second, different recording going terminal
+        // before this one applies must not clobber it (same class of bug
+        // as pendingFiresRef above). Corrections don't need the fire-queue's
+        // one-at-a-time pacing (they only set UI state, nothing here can
+        // race against itself), so the poller drains all of them the first
+        // time it finds the blocker clear.
+        pendingTerminalCorrectionsRef.current.push(applyTerminalError);
+        if (!terminalReconcileWaitRef.current) {
+          terminalReconcileWaitRef.current = setInterval(() => {
+            if (!pipelineRunningRef.current) {
+              const corrections = pendingTerminalCorrectionsRef.current;
+              pendingTerminalCorrectionsRef.current = [];
+              corrections.forEach((fn) => fn());
+              if (terminalReconcileWaitRef.current) {
+                clearInterval(terminalReconcileWaitRef.current);
+                terminalReconcileWaitRef.current = null;
+              }
+            }
+          }, 1000);
+        }
       } else {
         applyTerminalError();
       }
@@ -1209,6 +1227,9 @@ export default function Home() {
         pendingCtxByIdRef.current.get(item.id) ??
         { previousNote: '', outputFormat: genCtxRef.current.outputFormat };
       pendingCtxByIdRef.current.delete(item.id);
+      // Succeeded through the normal path — no longer needs an inline
+      // terminal correction if it were ever to reappear.
+      activeQueueUploadIdsRef.current.delete(item.id);
 
       const fire = () => {
         resetResults();
@@ -1263,7 +1284,11 @@ export default function Home() {
         sizeBytes: draft.blob.size,
         durationSec: draft.durationSec,
       });
-      q.enqueue(draft.blob, { durationSec: draft.durationSec }).catch(() => {});
+      q.enqueue(draft.blob, { durationSec: draft.durationSec })
+        .then((rec) => {
+          activeQueueUploadIdsRef.current.add(rec.id);
+        })
+        .catch(() => {});
     });
     return () => {
       offChange();
@@ -1279,6 +1304,7 @@ export default function Home() {
         clearInterval(terminalReconcileWaitRef.current);
         terminalReconcileWaitRef.current = null;
       }
+      pendingTerminalCorrectionsRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
