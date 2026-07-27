@@ -1153,6 +1153,29 @@ export default function Home() {
     queueRef.current = q;
     const offChange = q.onChange((items) => {
       setPendingUploads(items);
+
+      // A tracked id that's no longer in the queue at all was discarded
+      // (Discard / Clear all in the pending-uploads panel) — terminal is a
+      // different case, handled below. If it was the recording the main
+      // "Transcribing audio…" state currently belongs to, clear that
+      // spinner: there's nothing left to finish, and leaving it spinning
+      // forever would be exactly the stuck-state bug this whole mechanism
+      // exists to prevent, just via a different trigger than a terminal
+      // failure (code review finding, 2026-07-26). Unlike the terminal
+      // case there's no failure to report, so no deferral/queueing is
+      // needed if a different operation currently owns loading — that
+      // operation's own finally block resets it when IT finishes, same as
+      // if this discard had never happened.
+      const itemIds = new Set(items.map((i) => i.id));
+      for (const id of activeQueueUploadIdsRef.current) {
+        if (itemIds.has(id)) continue;
+        activeQueueUploadIdsRef.current.delete(id);
+        if (!pipelineRunningRef.current) {
+          setLoading(false);
+          setLoadingStage('');
+        }
+      }
+
       // Reconcile the optimistic "Transcribing audio…" state (set on
       // enqueue, possibly for an EARLIER recording than the one currently
       // on screen) if any tracked recording has since been marked terminal
