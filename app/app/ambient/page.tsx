@@ -2213,13 +2213,66 @@ export default function Home() {
 }
 
 // Inline toggle component used in the workspace header
-// Network + queue status pill — shown in the workspace header. Reflects:
-//   ● rose  "Needs attention"   — a queued recording failed permanently
-//                                 (non-retryable 4xx) and is parked
-//   ● green "Online"            — live, queue empty
-//   ● amber "Online · N saved"  — live, N recordings still uploading
-//   ● gray  "Offline · N saved" — no network, recordings safely persisted
-//   ● gray  "Offline"           — no network, no queued work
+// Network + queue status pill — shown in the workspace header. Precedence
+// (highest first): offline always wins — nothing can be retried right now
+// regardless of a parked terminal item, and the retry buttons the "needs
+// attention" state points at are disabled while offline anyway. Needs-
+// attention only applies once back online; then whether anything is
+// actively uploading; else idle. A single discriminant computed once (see
+// pillStatus) rather than four parallel cls/dot/label/title ternary chains
+// re-encoding the same precedence, which could drift out of sync with each
+// other (code review findings, 2026-07-26).
+//   ● gray  "Offline"             — no network, no queued work
+//   ● gray  "Offline · N saved"   — no network, recordings safely persisted
+//   ● rose  "Needs attention"     — online, but a queued recording failed
+//                                   permanently (non-retryable 4xx) and is
+//                                   parked
+//   ● amber "Uploading · N queued" — online, N recordings still uploading
+//   ● green "Online"               — online, queue empty
+type PillStatus = 'offline' | 'offline-saved' | 'needs-attention' | 'uploading' | 'online';
+
+function pillStatus(online: boolean, pendingCount: number, hasFailed: boolean): PillStatus {
+  if (!online) return pendingCount > 0 ? 'offline-saved' : 'offline';
+  if (hasFailed) return 'needs-attention';
+  return pendingCount > 0 ? 'uploading' : 'online';
+}
+
+const PILL_STYLE: Record<
+  PillStatus,
+  { cls: string; dot: string; label: (n: number) => string; title: string }
+> = {
+  offline: {
+    cls: 'bg-slate-100 text-slate-700 border-slate-200',
+    dot: 'bg-slate-500',
+    label: () => 'Offline',
+    title: 'No connection. Recording still works; transcripts will appear when the network returns.',
+  },
+  'offline-saved': {
+    cls: 'bg-slate-100 text-slate-700 border-slate-200',
+    dot: 'bg-slate-500',
+    label: (n) => `Offline · ${n} saved`,
+    title: 'No connection — tap to view saved recordings.',
+  },
+  'needs-attention': {
+    cls: 'bg-rose-50 text-rose-700 border-rose-200',
+    dot: 'bg-rose-500 animate-pulse',
+    label: (n) => `Needs attention · ${n} queued`,
+    title: 'A recording failed to upload and will not retry automatically — tap to retry or discard.',
+  },
+  uploading: {
+    cls: 'bg-amber-50 text-amber-700 border-amber-200',
+    dot: 'bg-amber-500 animate-pulse',
+    label: (n) => `Uploading · ${n} queued`,
+    title: 'Recordings are uploading in the background — tap to view queue.',
+  },
+  online: {
+    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    dot: 'bg-emerald-500',
+    label: () => 'Online',
+    title: 'Live connection to the backend.',
+  },
+};
+
 function NetworkPill({
   online,
   pendingCount,
@@ -2231,29 +2284,7 @@ function NetworkPill({
   hasFailed?: boolean;
   onClick?: () => void;
 }) {
-  const cls = hasFailed
-    ? 'bg-rose-50 text-rose-700 border-rose-200'
-    : !online
-    ? 'bg-slate-100 text-slate-700 border-slate-200'
-    : pendingCount > 0
-    ? 'bg-amber-50 text-amber-700 border-amber-200'
-    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  const dot = hasFailed
-    ? 'bg-rose-500 animate-pulse'
-    : !online
-    ? 'bg-slate-500'
-    : pendingCount > 0
-    ? 'bg-amber-500 animate-pulse'
-    : 'bg-emerald-500';
-  const label = hasFailed
-    ? `Needs attention · ${pendingCount} queued`
-    : !online
-    ? pendingCount > 0
-      ? `Offline · ${pendingCount} saved`
-      : 'Offline'
-    : pendingCount > 0
-    ? `Uploading · ${pendingCount} queued`
-    : 'Online';
+  const { cls, dot, label, title } = PILL_STYLE[pillStatus(online, pendingCount, hasFailed ?? false)];
   const Tag = onClick ? 'button' : 'span';
   return (
     <Tag
@@ -2262,20 +2293,10 @@ function NetworkPill({
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-medium rounded-full border ${cls} ${
         onClick ? 'hover:brightness-95 cursor-pointer' : ''
       }`}
-      title={
-        hasFailed
-          ? 'A recording failed to upload and will not retry automatically — tap to retry or discard.'
-          : online
-          ? pendingCount > 0
-            ? 'Recordings are uploading in the background — tap to view queue.'
-            : 'Live connection to the backend.'
-          : pendingCount > 0
-          ? 'No connection — tap to view saved recordings.'
-          : 'No connection. Recording still works; transcripts will appear when the network returns.'
-      }
+      title={title}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-      {label}
+      {label(pendingCount)}
     </Tag>
   );
 }

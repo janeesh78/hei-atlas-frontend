@@ -48,6 +48,13 @@ export default function PendingUploadsPanel({
   // 401s ("Missing bearer token" / "Session expired") mean the upload is
   // blocked on auth, not on the network — surface the actual fix: sign in.
   const authBlocked = items.some((i) => i.lastError && /\b401\b/.test(i.lastError));
+  // Terminal items (non-retryable 4xx) are explicitly excluded from every
+  // automatic drain (see recordingQueue.ts's tryUpload) — the generic
+  // online banner below claiming "uploads will retry automatically" is
+  // simply false for these, and directly contradicts the header pill's own
+  // "Needs attention" state for the same item (code review finding,
+  // 2026-07-26).
+  const hasTerminal = items.some((i) => i.terminal);
 
   return (
     <>
@@ -100,7 +107,13 @@ export default function PendingUploadsPanel({
             </a>
           </div>
         )}
-        {total > 0 && !authBlocked && (
+        {total > 0 && !authBlocked && hasTerminal && (
+          <div className="mx-6 mt-4 px-3 py-2.5 rounded-button text-[13px] border bg-rose-50 text-rose-800 border-rose-200">
+            One or more recordings failed and won&apos;t retry automatically — use
+            &quot;Retry now&quot; below, or discard if the audio can&apos;t be recovered.
+          </div>
+        )}
+        {total > 0 && !authBlocked && !hasTerminal && (
           <div
             className={`mx-6 mt-4 px-3 py-2 rounded-button text-[13px] border ${
               online
