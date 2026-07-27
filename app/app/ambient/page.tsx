@@ -30,6 +30,13 @@ import { useRouter } from 'next/navigation';
 import { getPreferences, updatePreferences, saveEncounter, deleteEncounter, listTodayEncounters, getEncounter, pingActivity, saveLocation, normalizePersistedCoding, type SavedEncounter, type CodingDecision, type PersistedCoding } from '@/lib/auth';
 import { decodeHtmlEntities } from '@/lib/clinicalText';
 
+// Shared core phrasing for a terminal (non-retryable) upload failure — used
+// by both the main workspace's inline correction (onChange, below) and the
+// header pill's tooltip (NetworkPill, below), so the two describe the same
+// situation identically instead of drifting into different wording (code
+// review finding, 2026-07-26: one said "won't", the other "will not").
+const TERMINAL_UPLOAD_REASON = "won't retry automatically";
+
 export default function Home() {
   const router = useRouter();
   const { user, isBooting, logout: sessionLogout, getIdleMs, idleWarning, dismissIdleWarning } = useSession();
@@ -1194,7 +1201,7 @@ export default function Home() {
         setLoading(false);
         setLoadingStage('');
         setError(
-          `Recording upload failed and won't retry automatically (${terminalItem.lastError || 'upload rejected'}). ` +
+          `Recording upload failed and ${TERMINAL_UPLOAD_REASON} (${terminalItem.lastError || 'upload rejected'}). ` +
             'The audio is still saved on this device — open the upload queue (top right) to retry or discard it.',
         );
       };
@@ -2257,7 +2264,7 @@ const PILL_STYLE: Record<
     cls: 'bg-rose-50 text-rose-700 border-rose-200',
     dot: 'bg-rose-500 animate-pulse',
     label: (n) => `Needs attention · ${n} queued`,
-    title: 'A recording failed to upload and will not retry automatically — tap to retry or discard.',
+    title: `A recording failed to upload and ${TERMINAL_UPLOAD_REASON} — tap to retry or discard.`,
   },
   uploading: {
     cls: 'bg-amber-50 text-amber-700 border-amber-200',
