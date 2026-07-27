@@ -100,6 +100,11 @@ export default function Home() {
   // success with no further backend activity at all).
   const pipelineRunningRef = useRef(false);
   const queueFireWaitRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Single-slot deferral for the terminal-upload error correction below —
+  // deliberately separate from queueFireWaitRef (a second, unrelated deferred
+  // action sharing that slot would recreate the exact single-slot-clobbering
+  // bug this ref exists to avoid).
+  const terminalReconcileWaitRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [pendingUploads, setPendingUploads] = useState<PendingRecording[]>([]);
   // Must default to `true` unconditionally (not `navigator.onLine`) so the
   // SSR-rendered HTML matches the initial client render. The real value is
@@ -257,6 +262,11 @@ export default function Home() {
     setLoading(true);
     setLoadingStage('Loading saved visit…');
     setError(null);
+    // Marks the window this restore is genuinely in flight — see
+    // pipelineRunningRef's declaration. Without this, a queued recording's
+    // onSuccess firing mid-restore sees no generation running and clobbers
+    // this visit's data with a concurrent one.
+    pipelineRunningRef.current = true;
     try {
       const full = await getEncounter(id);
       resetResults();
@@ -298,6 +308,7 @@ export default function Home() {
     } finally {
       setLoading(false);
       setLoadingStage('');
+      pipelineRunningRef.current = false;
     }
   };
 
@@ -877,6 +888,11 @@ export default function Home() {
     setLoading(true);
     setLoadingStage('Reconciling with previous encounter...');
     setError(null);
+    // See pipelineRunningRef's declaration — this can run unattended (the
+    // debounced auto-reorganize effect below calls it without any user
+    // click), so a queued recording's onSuccess firing mid-reconciliation
+    // needs this to correctly defer rather than clobber it.
+    pipelineRunningRef.current = true;
     try {
       const { note: reconciled } = await generateNote({
         transcript,
@@ -931,6 +947,7 @@ export default function Home() {
       setReconciling(false);
       setLoading(false);
       setLoadingStage('');
+      pipelineRunningRef.current = false;
     }
   };
 
@@ -941,7 +958,16 @@ export default function Home() {
     if (!transcript.trim() || loading) return;
     setError(null);
     setLoading(true);
-    await runNotePipeline(transcript);
+    // See pipelineRunningRef's declaration — this is the exact manual-retry
+    // scenario the queue's onSuccess guard was written for; without setting
+    // this, a queued recording finishing here races a second concurrent
+    // /notes/generate into the note this retry is trying to fix.
+    pipelineRunningRef.current = true;
+    try {
+      await runNotePipeline(transcript);
+    } finally {
+      pipelineRunningRef.current = false;
+    }
   };
 
   // Auto-reorganize: pasting a prior note once a note already exists kicks off
@@ -1114,7 +1140,9 @@ export default function Home() {
       const activeId = activeQueueUploadIdRef.current;
       if (!activeId) return;
       const active = items.find((i) => i.id === activeId);
-      if (active?.terminal) {
+      if (!active?.terminal) return;
+
+      const applyTerminalError = () => {
         activeQueueUploadIdRef.current = null;
         setLoading(false);
         setLoadingStage('');
@@ -1122,6 +1150,33 @@ export default function Home() {
           `Recording upload failed and won't retry automatically (${active.lastError || 'upload rejected'}). ` +
             'The audio is still saved on this device — open the upload queue (top right) to retry or discard it.',
         );
+      };
+
+      if (pipelineRunningRef.current) {
+        // A different, genuinely-running operation (manual note retry,
+        // previous-note reconciliation, restoring a saved visit, or another
+        // queued recording's own note generation) currently owns loading/
+        // loadingStage/error — clobbering it to report THIS recording's
+        // failure would tear down real, in-progress work and leave a
+        // misattributed error on screen (nothing on the success path clears
+        // `error`). Defer, same pattern as the queue's own fire() guard, and
+        // re-check the tracked id is still this one before applying — a
+        // newer recording may have taken over the slot while we waited.
+        if (terminalReconcileWaitRef.current) clearInterval(terminalReconcileWaitRef.current);
+        terminalReconcileWaitRef.current = setInterval(() => {
+          if (activeQueueUploadIdRef.current !== activeId) {
+            if (terminalReconcileWaitRef.current) clearInterval(terminalReconcileWaitRef.current);
+            terminalReconcileWaitRef.current = null;
+            return;
+          }
+          if (!pipelineRunningRef.current) {
+            if (terminalReconcileWaitRef.current) clearInterval(terminalReconcileWaitRef.current);
+            terminalReconcileWaitRef.current = null;
+            applyTerminalError();
+          }
+        }, 1000);
+      } else {
+        applyTerminalError();
       }
     });
     const offSuccess = q.onSuccess((item, transcript) => {
@@ -1196,6 +1251,10 @@ export default function Home() {
       if (queueFireWaitRef.current) {
         clearInterval(queueFireWaitRef.current);
         queueFireWaitRef.current = null;
+      }
+      if (terminalReconcileWaitRef.current) {
+        clearInterval(terminalReconcileWaitRef.current);
+        terminalReconcileWaitRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
