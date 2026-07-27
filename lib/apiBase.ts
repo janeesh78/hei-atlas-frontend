@@ -228,3 +228,24 @@ export async function apiFetch(
       : 'Failed to fetch',
   );
 }
+
+/**
+ * Clear any pinned base and force one fresh, cheap discovery of the working
+ * one, letting apiFetch's own success path re-pin it — without waiting on a
+ * real (potentially large/slow) request. Intended for RecordingQueue's
+ * `drain(force)`: called ONCE before fanning out a forced batch retry, so
+ * every item in the batch reuses the one freshly-confirmed pin instead of
+ * each independently re-walking the full candidate list in parallel (which
+ * could turn a single retry click into N concurrent multi-minute timeouts
+ * on dead bases). `/health` needs no auth and answers instantly once a real
+ * base is reached, so this typically resolves in well under the per-attempt
+ * timeout even when the first one or two candidates are dead.
+ */
+export async function reprobeApiBase(): Promise<void> {
+  clearPinnedBase();
+  try {
+    await apiFetch('/health', { method: 'GET' });
+  } catch {
+    /* best-effort — the batch's own uploads still retry their own walk */
+  }
+}

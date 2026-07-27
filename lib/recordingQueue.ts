@@ -232,11 +232,19 @@ export type UploadResult = UploadOk | UploadErr;
 
 export type Uploader = (blob: Blob) => Promise<UploadResult>;
 
+/** Re-discover and re-pin the working transport path. See `drain`'s `force`
+ *  handling — called once before a forced batch retry fans out, not per
+ *  item. Transport-agnostic by design (this module doesn't import apiBase
+ *  directly): the caller wires in whatever "clear pin, probe cheaply"
+ *  behavior its own transport layer needs. */
+export type Prober = () => Promise<void>;
+
 export class RecordingQueue {
   private items: PendingRecording[] = [];
   private listeners = new Set<Listener>();
   private successListeners = new Set<SuccessListener>();
   private uploader: Uploader;
+  private prober?: Prober;
   private inFlight = new Set<string>();
   private retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private watcher: ReturnType<typeof setInterval> | null = null;
@@ -252,10 +260,15 @@ export class RecordingQueue {
   private onVisibility = () => {
     if (document.visibilityState === 'visible') this.drain();
   };
+  // Force-retries even parked terminal items on fresh sign-in — same "force"
+  // semantics as the UI's manual "Retry now"/"Retry all", so it must go
+  // through the same drain(true) path (and therefore get the same prober
+  // re-pin) rather than a bespoke call that quietly skips it.
   private onSignedIn = () => this.drain(true);
 
-  constructor(uploader: Uploader) {
+  constructor(uploader: Uploader, prober?: Prober) {
     this.uploader = uploader;
+    this.prober = prober;
   }
 
   async init(): Promise<void> {
@@ -377,9 +390,23 @@ export class RecordingQueue {
    * (watcher tick, focus, online) respect it. Without that respect, the
    * 20-second watcher plus focus events in every open tab hammered a failing
    * item ~16×/min (195 attempts observed in the field, 2026-07-09).
+   *
+   * A forced drain re-probes the transport path ONCE first (if a prober was
+   * supplied) before fanning out to every item — otherwise each item's own
+   * upload independently re-walks the full candidate list in parallel from
+   * a freshly-cleared pin, turning one retry click into N concurrent
+   * multi-minute timeouts on dead bases instead of N uploads that all reuse
+   * the one base the probe just confirmed works.
    */
-  drain(force = false): void {
+  async drain(force = false): Promise<void> {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    if (force && this.prober) {
+      try {
+        await this.prober();
+      } catch {
+        /* best-effort — items below still retry their own walk on failure */
+      }
+    }
     for (const rec of this.items) this.tryUpload(rec, force);
   }
 

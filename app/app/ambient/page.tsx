@@ -18,6 +18,7 @@ import {
   type CodingReport,
 } from '@/lib/api';
 import { RecordingQueue, saveStandbyPart, takeStandbyDraft, clearStandbyDraft, type PendingRecording } from '@/lib/recordingQueue';
+import { reprobeApiBase } from '@/lib/apiBase';
 import PendingUploadsPanel from '@/components/PendingUploadsPanel';
 import { matchCitations } from '@/lib/citations';
 import { fetchNearbyTrials, type NearbyTrial } from '@/lib/trials';
@@ -1126,7 +1127,7 @@ export default function Home() {
   // when the network is gone.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const q = new RecordingQueue((blob) => transcribeAudioSafe(blob));
+    const q = new RecordingQueue((blob) => transcribeAudioSafe(blob), reprobeApiBase);
     queueRef.current = q;
     const offChange = q.onChange((items) => {
       setPendingUploads(items);

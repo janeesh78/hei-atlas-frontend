@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import type { PendingRecording, RecordingQueue } from '@/lib/recordingQueue';
-import { clearPinnedBase } from '@/lib/apiBase';
 
 interface PendingUploadsPanelProps {
   open: boolean;
@@ -49,16 +48,6 @@ export default function PendingUploadsPanel({
   // 401s ("Missing bearer token" / "Session expired") mean the upload is
   // blocked on auth, not on the network — surface the actual fix: sign in.
   const authBlocked = items.some((i) => i.lastError && /\b401\b/.test(i.lastError));
-
-  // A manual retry is a deliberate, high-intent action — the physician
-  // already knows this failed. Drop any pinned API base first so it isn't
-  // silently repeated through a path (e.g. the /backend proxy) that may
-  // have been wrong or itself the problem; apiFetch re-pins whatever
-  // actually works on this attempt.
-  const forceRetry = () => {
-    clearPinnedBase();
-    queue?.drain(true);
-  };
 
   return (
     <>
@@ -130,7 +119,7 @@ export default function PendingUploadsPanel({
           <div className="px-6 py-3 flex items-center gap-2">
             <button
               type="button"
-              onClick={forceRetry}
+              onClick={() => queue?.drain(true)}
               disabled={!online}
               className="btn-primary text-[13px] py-2 flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -202,7 +191,7 @@ export default function PendingUploadsPanel({
                   <div className="flex items-center gap-2 pt-1">
                     <button
                       type="button"
-                      onClick={forceRetry}
+                      onClick={() => queue?.drain(true)}
                       disabled={!online}
                       className="btn-secondary text-[12px] py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
