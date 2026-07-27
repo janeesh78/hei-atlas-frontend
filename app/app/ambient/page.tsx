@@ -100,6 +100,16 @@ export default function Home() {
   // audio transcriptions is stuck", right after a clean transcription
   // success with no further backend activity at all).
   const pipelineRunningRef = useRef(false);
+  // FIFO of fire() calls deferred because a pipeline was already running
+  // when their upload succeeded. A single-slot ref here (as this used to be)
+  // meant a second deferred recording clobbered the first's interval/closure
+  // outright — its transcript had already uploaded and been deleted from
+  // IndexedDB, so its note was silently never generated, with no error or
+  // indication anywhere (code review finding, 2026-07-26). Queuing instead
+  // of overwriting means every deferred recording eventually fires; draining
+  // one at a time (see queueFireWaitRef below) keeps them from firing
+  // concurrently into each other exactly as pipelineRunningRef intends.
+  const pendingFiresRef = useRef<Array<() => void>>([]);
   const queueFireWaitRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Single-slot deferral for the terminal-upload error correction below —
   // deliberately separate from queueFireWaitRef (a second, unrelated deferred
@@ -1216,17 +1226,28 @@ export default function Home() {
         // felt stuck (feedback 2026-07-26: "retrying the current note").
         // Firing this queued item on top of that would run two concurrent
         // /notes/generate calls and race whichever finishes last into
-        // clobbering the note state. Wait for the in-flight one to finish
-        // instead of racing it — the transcript already uploaded fine, no
-        // urgency to fire this exact instant.
-        if (queueFireWaitRef.current) clearInterval(queueFireWaitRef.current);
-        queueFireWaitRef.current = setInterval(() => {
-          if (!pipelineRunningRef.current) {
-            if (queueFireWaitRef.current) clearInterval(queueFireWaitRef.current);
-            queueFireWaitRef.current = null;
-            fire();
-          }
-        }, 1000);
+        // clobbering the note state. Queue it instead of racing it — the
+        // transcript already uploaded fine, no urgency to fire this exact
+        // instant — and start the shared poller if it isn't already running
+        // (one poller drains the whole queue; a second recording arriving
+        // while it's already armed just adds to the same queue rather than
+        // starting a competing timer).
+        pendingFiresRef.current.push(fire);
+        if (!queueFireWaitRef.current) {
+          queueFireWaitRef.current = setInterval(() => {
+            if (!pipelineRunningRef.current && pendingFiresRef.current.length > 0) {
+              // Shift, not drain-all: calling fire() sets pipelineRunningRef
+              // true again for the run it starts, so only one comes off per
+              // tick — the rest wait for their own turn once that finishes.
+              const next = pendingFiresRef.current.shift();
+              next?.();
+            }
+            if (pendingFiresRef.current.length === 0 && queueFireWaitRef.current) {
+              clearInterval(queueFireWaitRef.current);
+              queueFireWaitRef.current = null;
+            }
+          }, 1000);
+        }
       } else {
         fire();
       }
@@ -1253,6 +1274,7 @@ export default function Home() {
         clearInterval(queueFireWaitRef.current);
         queueFireWaitRef.current = null;
       }
+      pendingFiresRef.current = [];
       if (terminalReconcileWaitRef.current) {
         clearInterval(terminalReconcileWaitRef.current);
         terminalReconcileWaitRef.current = null;
