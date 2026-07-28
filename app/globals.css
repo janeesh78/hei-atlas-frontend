@@ -258,19 +258,38 @@ select {
     font-size: 11pt;
     line-height: 1.5;
   }
+  /* Print isolation: the workspace (recording controls, transcript box,
+     "Load previous note" panel, format tabs, Ask Atlas sidebar, etc.) all
+     share the page with .results-panel-card rather than being replaced by
+     it — a deny-list of header/footer/nav/aside missed most of that and
+     printed the whole workspace around the note (feedback 2026-07-28).
+     Hide everything, then reveal only the note card and pin it to the
+     page origin so it isn't left stranded wherever it sat in the
+     (now-invisible) document flow. */
+  body * {
+    visibility: hidden !important;
+  }
+  .results-panel-card,
+  .results-panel-card * {
+    visibility: visible !important;
+  }
+  .results-panel-card {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
   header,
   footer,
   .print-hide,
   nav,
   aside {
     display: none !important;
-  }
-  .results-panel-card {
-    border: none !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    margin: 0 !important;
-    max-width: 100% !important;
   }
   .problem-block,
   .break-inside-avoid {
