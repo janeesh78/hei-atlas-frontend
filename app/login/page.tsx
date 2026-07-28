@@ -114,7 +114,7 @@ function LoginPageInner() {
                   <div className="flex-1">
                     <label className="ds-label">Credentials</label>
                     <select value={credentials} onChange={(e) => setCredentials(e.target.value)} className="ds-input mt-1">
-                      {['MD','DO','PA-C','NP','MBBS','MD, PhD','DNP','RN'].map(c => <option key={c}>{c}</option>)}
+                      {['MD','DO','PA-C','NP','MBBS','MD, PhD','DNP','RN','PharmD'].map(c => <option key={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="flex-1">

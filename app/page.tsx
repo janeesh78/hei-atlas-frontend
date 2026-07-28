@@ -201,7 +201,7 @@ function ContactForm() {
                 onChange={(e) => setCredentials(e.target.value)}
                 className="ds-input mt-1"
               >
-                {['MD','DO','PA-C','NP','MBBS','MD, PhD','DNP','RN','Other'].map((c) => (
+                {['MD','DO','PA-C','NP','MBBS','MD, PhD','DNP','RN','PharmD','Other'].map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
