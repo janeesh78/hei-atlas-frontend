@@ -60,9 +60,10 @@ const MOLECULAR_LABS: ExternalLink[] = [
   { name: 'Tempus',             subtitle: 'Physician Portal', url: 'https://hub.securetempus.com/',             monogram: 'TX', color: 'bg-violet-50 text-violet-700' },
   { name: 'Guardant Health',    subtitle: 'Physician Portal', url: 'https://portal.guardanthealth.com',         monogram: 'GH', color: 'bg-emerald-50 text-emerald-700' },
   { name: 'Foundation Medicine',subtitle: 'Physician Portal', url: 'https://ordering.foundationmedicine.com',   monogram: 'FM', color: 'bg-cyan-50 text-cyan-700' },
-  { name: 'Natera',             subtitle: 'Physician Portal', url: 'https://my.natera.com',                     monogram: 'NT', color: 'bg-rose-50 text-rose-700' },
-  { name: 'NeoGenomics',        subtitle: 'Physician Portal', url: 'https://neogenomics.com',                   monogram: 'NG', color: 'bg-amber-50 text-amber-700' },
-  { name: 'Caris Life Sciences',subtitle: 'Physician Portal', url: 'https://miportal.carisls.com',              monogram: 'CL', color: 'bg-indigo-50 text-indigo-700' },
+  { name: 'Natera',             subtitle: 'Physician Portal', url: 'https://connect.natera.com',                monogram: 'NT', color: 'bg-rose-50 text-rose-700' },
+  { name: 'NeoGenomics',        subtitle: 'Physician Portal', url: 'https://neolink.neogenomics.com/',          monogram: 'NG', color: 'bg-amber-50 text-amber-700' },
+  { name: 'Caris Life Sciences',subtitle: 'Physician Portal', url: 'https://providerportal.carisls.com',        monogram: 'CL', color: 'bg-indigo-50 text-indigo-700' },
+  { name: 'clonoSEQ',           subtitle: 'Physician Portal', url: 'https://diagnostics.adaptivebiotech.com/account/login', monogram: 'CS', color: 'bg-teal-50 text-teal-700' },
 ];
 
 const CLINICAL_RESOURCES: ExternalLink[] = [
