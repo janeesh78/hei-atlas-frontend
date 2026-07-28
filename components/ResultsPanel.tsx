@@ -118,6 +118,7 @@ function buildSections(note: OncologyNote, format: OutputFormat): Section[] {
         { label: 'History of Present Illness', value: note.history_present_illness || '' },
         { label: 'Oncologic History', value: oncoHx },
         { label: 'Prior Oncologic Therapy', value: note.prior_oncologic_therapy || '' },
+        { label: 'Physical Examination', value: note.physical_examination || '' },
         { label: 'Relevant Labs / Imaging', value: note.lab_imaging_review || '' },
         { label: 'Assessment', value: note.assessment || '' },
         { label: 'Recommendations / Plan', value: note.plan || '' },
@@ -321,6 +322,9 @@ function FollowUpNoteTemplate({
           </tbody>
         </table>
       </div>
+
+      <H3>Physical Examination</H3>
+      <BodyBlock text={m.physicalExam} />
 
       <H3>Laboratory Review</H3>
       <BodyBlock text={m.labsReview} />
@@ -1045,6 +1049,7 @@ interface FollowUpModel {
   primaryDx: KeyVal[];
   priorTherapyRaw: string;      // placeholder shown when no structured rows exist
   priorTherapyRows: { date: string; treatment: string; outcome: string }[]; // from note.prior_oncologic_therapy
+  physicalExam: string;         // from note.physical_examination
   labsReview: string;           // laboratory results only — split from imaging (feedback 2026-07-09)
   imagingReview: string;
   imagingEntries: ImagingEntry[];   // structured chronological entries (merged current + previous)
@@ -1072,6 +1077,7 @@ function buildFollowUpModel(
     assessment: decodeHtmlEntities(note.assessment || ''),
     plan: decodeHtmlEntities(note.plan || ''),
     current_medications: decodeHtmlEntities(note.current_medications || ''),
+    physical_examination: decodeHtmlEntities(note.physical_examination || ''),
     lab_imaging_review: decodeHtmlEntities(note.lab_imaging_review || ''),
     laboratory_review: note.laboratory_review != null ? decodeHtmlEntities(note.laboratory_review) : note.laboratory_review,
     imaging_review: note.imaging_review != null ? decodeHtmlEntities(note.imaging_review) : note.imaging_review,
@@ -1085,6 +1091,7 @@ function buildFollowUpModel(
   const labImg = or(note.lab_imaging_review);
   const meds = or(note.current_medications);
   const followUp = or(note.follow_up);
+  const physicalExam = or(note.physical_examination);
 
   // Labs vs imaging: the backend emits separate laboratory_review /
   // imaging_review fields since 2026-07-09. The heuristic sentence splitter is
@@ -1265,6 +1272,7 @@ function buildFollowUpModel(
         return { date, treatment, outcome };
       })
       .filter((r) => r.treatment || r.date),
+    physicalExam,
     labsReview: labsText || NOT_DOC,
     imagingReview: imagingText || NOT_DOC,
     imagingEntries: mergeImagingEntries(
@@ -1435,6 +1443,9 @@ function serializeNote(
     } else {
       push(`| ${NOT_DOC} | | |`);
     }
+
+    push('\nPhysical Examination');
+    push(m.physicalExam || NOT_DOC);
 
     push('\nLaboratory Review');
     push(m.labsReview || NOT_DOC);
