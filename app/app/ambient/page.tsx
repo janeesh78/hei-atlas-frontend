@@ -1385,17 +1385,25 @@ export default function Home() {
 
   // Rolling draft: while actively recording, refresh the IndexedDB snapshot
   // every 30 s so at most half a minute of audio is at risk if the OS kills
-  // the tab without firing any lifecycle event.
+  // the tab without firing any lifecycle event. The recurring interval alone
+  // left a full 30s dead zone with ZERO draft protection at the start of
+  // every recording (and after every pause/resume, since this effect
+  // re-runs on that transition too) — a refresh in that window silently
+  // lost the whole encounter, not just the last 30s (feedback 2026-07-28).
+  // A one-shot flush shortly after start/resume closes that gap without
+  // changing the steady-state write cadence for long recordings.
   useEffect(() => {
     if (!isListening || isPaused) return;
-    const iv = setInterval(() => {
+    const flushNow = () => {
       const mr = mediaRecorderRef.current;
       if (mr?.state === 'recording') {
         standbyFlushRef.current = true;
         try { mr.requestData(); } catch { /* unsupported */ }
       }
-    }, 30_000);
-    return () => clearInterval(iv);
+    };
+    const early = setTimeout(flushNow, 5_000);
+    const iv = setInterval(flushNow, 30_000);
+    return () => { clearTimeout(early); clearInterval(iv); };
   }, [isListening, isPaused]);
 
   // ── Cross-device encounter sync ────────────────────────────────────────
