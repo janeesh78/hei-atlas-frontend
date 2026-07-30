@@ -171,7 +171,9 @@ export default function PendingUploadsPanel({
               {items.map((item) => (
                 <li
                   key={item.id}
-                  className="ds-card p-4 flex flex-col gap-2"
+                  className={`ds-card p-4 flex flex-col gap-2 ${
+                    item.terminal ? 'border-rose-300' : ''
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -185,7 +187,7 @@ export default function PendingUploadsPanel({
                     {item.attempts > 0 && (
                       <span
                         className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border whitespace-nowrap ${
-                          item.lastError
+                          item.terminal
                             ? 'bg-rose-50 text-rose-700 border-rose-200'
                             : 'bg-amber-50 text-amber-700 border-amber-200'
                         }`}
@@ -195,10 +197,24 @@ export default function PendingUploadsPanel({
                     )}
                   </div>
 
+                  {/* Terminal (won't self-retry) gets the alarming red "needs
+                      you" treatment. A retryable failure is expected, routine
+                      network noise the queue is already handling — the same
+                      red "Last error" box for both made an item mid-backoff
+                      (about to succeed on its own, as most do) look exactly
+                      as urgent as one that's genuinely stuck (feedback
+                      2026-07-30: a 3-attempt retryable failure read as a
+                      crisis when it silently succeeded on attempt 4). */}
                   {item.lastError && (
-                    <p className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded-button px-2 py-1.5">
-                      Last error: {item.lastError}
-                    </p>
+                    item.terminal ? (
+                      <p className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded-button px-2 py-1.5">
+                        Last error: {item.lastError}
+                      </p>
+                    ) : (
+                      <p className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-button px-2 py-1.5">
+                        Hit a snag, retrying automatically — {item.lastError}
+                      </p>
+                    )
                   )}
 
                   <div className="flex items-center gap-2 pt-1">
