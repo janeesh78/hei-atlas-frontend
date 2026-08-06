@@ -213,6 +213,19 @@ export default function BackendCodingPanel({
         </div>
       </div>
 
+      {/* Loading — the only coding UI shown until the real report lands (the
+          instant client-side preview that used to fill this gap was removed
+          per feedback 2026-08-01: two similarly-labeled coding sections read
+          as a bug). Gated to the FIRST load only — a Recalculate-in-flight
+          keeps showing the existing report underneath rather than yanking it
+          away; that case already has its own "Analyzing…" button label. */}
+      {loading && !report && !error && (
+        <div className="flex items-center gap-3 py-4">
+          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm text-gray-700">Analyzing coding…</p>
+        </div>
+      )}
+
       {error && (
         <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-sm text-amber-800">
           {error} The note itself is unaffected — coding is a separate, optional step.

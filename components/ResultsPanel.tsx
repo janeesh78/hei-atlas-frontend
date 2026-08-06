@@ -7,7 +7,6 @@ import type { ToxicityFinding } from '@/lib/ctcae';
 import type { CodingResult } from '@/lib/coding';
 import type { CodingDecision } from '@/lib/auth';
 import ToxicityPanel from '@/components/ToxicityPanel';
-import CodingPanel from '@/components/CodingPanel';
 import BackendCodingPanel from '@/components/BackendCodingPanel';
 import ThumbsFeedback from '@/components/ThumbsFeedback';
 
@@ -2095,8 +2094,11 @@ export default function ResultsPanel({
               />
             )}
 
-            {/* Coding intelligence — instant client-side preview */}
-            {enableCoding && coding && <CodingPanel result={coding} />}
+            {/* The instant client-side preview (CodingPanel) is intentionally not
+                rendered here — two similarly-labeled coding sections read as
+                either a bug or a "which one do I trust" question (feedback
+                2026-08-01). BackendCodingPanel below is the only one shown;
+                its own loading state covers the gap while it's computing. */}
 
             {/* Coding intelligence — authoritative backend deterministic engine */}
             {enableCoding && note?.coding_facts && (
