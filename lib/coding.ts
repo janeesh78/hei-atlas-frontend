@@ -112,12 +112,36 @@ const NEGATION_AFTER = [
   /^\s*[:=]\s*(?:none|n\/a|not\s+applicable|nil|no)\b/i,
 ];
 
+// A negation word governs everything up to the next clause boundary, so it
+// can negate every item in a list — "Denies fever, chills, vomiting,
+// diarrhea, or pain" negates "diarrhea" too, not just "fever" immediately
+// after "Denies" (feedback 2026-08-01: exactly that sentence, matched on
+// "diarrhea", was coded as active toxic gastroenteritis/colitis from a
+// purely negative ROS — NEGATION_BEFORE only catches a negation word
+// immediately adjacent to the match, which misses every list item past the
+// first). A contrast conjunction ("but", "however", ...) reopens the clause
+// to a new, non-negated claim, so only the text after the last one counts.
+const CLAUSE_BOUNDARY = /[.!?;\n]/g;
+const NEGATION_TRIGGER = /\b(?:no|not|never|denies|denied|without)\b/i;
+const NEGATION_SCOPE_BREAK = /\b(?:but|however|although|though|except|aside from|other than)\b/i;
+
 function isNegated(text: string, idx: number, matchLen: number): boolean {
   const before = text.slice(Math.max(0, idx - 50), idx);
   const after = text.slice(idx + matchLen, idx + matchLen + 30);
   if (NEGATION_BEFORE.some((p) => p.test(before))) return true;
   if (NEGATION_AFTER.some((p) => p.test(after))) return true;
-  return false;
+
+  // Widen to the current clause (capped at 300 chars back) and look for a
+  // negation trigger anywhere in it, past any contrast conjunction.
+  const window = text.slice(Math.max(0, idx - 300), idx);
+  let clauseStart = 0;
+  let boundary: RegExpExecArray | null;
+  CLAUSE_BOUNDARY.lastIndex = 0;
+  while ((boundary = CLAUSE_BOUNDARY.exec(window)) !== null) clauseStart = boundary.index + 1;
+  let clause = window.slice(clauseStart);
+  const scopeBreak = NEGATION_SCOPE_BREAK.exec(clause);
+  if (scopeBreak) clause = clause.slice(scopeBreak.index + scopeBreak[0].length);
+  return NEGATION_TRIGGER.test(clause);
 }
 
 function probe(text: string, patterns: RegExp[]): Hit {
@@ -189,7 +213,13 @@ const PRIMARY_ICD: IcdRule[] = [
   // is far too noisy in a transcribed conversation ("all right", "all over",
   // "all good") to use safely; we accept a small recall loss for huge
   // precision gains.
-  { patterns: [/acute\s+lymphoblastic\s+leukemia/i, /\bb[- ]?all\b/i, /\bt[- ]?all\b/i], code: 'C91.00', description: 'Acute lymphoblastic leukemia not having achieved remission' },
+  // Separator between the lineage letter and "ALL" is REQUIRED (hyphen or
+  // space, never zero-width) — /\bb[- ]?all\b/i and /\bt[- ]?all\b/i with an
+  // OPTIONAL separator also match the plain English words "ball" and "tall"
+  // (feedback 2026-08-01: "...mix a drug about that tall..." was coded as
+  // active B-cell/T-cell acute lymphoblastic leukemia, PRIMARY, 85%
+  // confidence — a false cancer diagnosis fabricated from an ordinary word).
+  { patterns: [/acute\s+lymphoblastic\s+leukemia/i, /\bb[- ]all\b/i, /\bt[- ]all\b/i], code: 'C91.00', description: 'Acute lymphoblastic leukemia not having achieved remission' },
   { patterns: [/chronic\s+lymphocytic\s+leukemia/i, /\bcll\b/i], code: 'C91.10', description: 'Chronic lymphocytic leukemia of B-cell type not having achieved remission' },
   { patterns: [/chronic\s+myeloid\s+leukemia/i, /\bcml\b/i], code: 'C92.10', description: 'Chronic myeloid leukemia, BCR/ABL-positive, not having achieved remission' },
   // GI / hepatobiliary
