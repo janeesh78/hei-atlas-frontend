@@ -24,6 +24,13 @@ const NOTE_GENERATION_TIMEOUT_MS = 120_000;
 // succeed is not.
 const TRANSCRIPTION_TIMEOUT_MS = 300_000;
 
+// /coding/mdm-narrative is a single synchronous Claude call (adaptive
+// thinking) — same class of "waits for the whole LLM response before
+// answering at all" endpoint as /notes/generate and /transcription/ above,
+// so it gets the same generous-timeout treatment up front rather than
+// waiting to rediscover the exact same 8s-abort bug a third time.
+const MDM_NARRATIVE_TIMEOUT_MS = 90_000;
+
 /**
  * Fire-and-forget telemetry ping to the backend. Used to track frontend
  * pipeline progress in the backend log so we can diagnose silent stalls
@@ -332,6 +339,49 @@ export async function analyzeCoding(payload: {
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Coding analysis failed (${res.status}): ${text || res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export interface MdmNarrativeResponse {
+  narrative: string;
+  disclaimer: string;
+}
+
+/**
+ * POST /coding/mdm-narrative — on-demand only (a physician click), never
+ * fired automatically alongside analyzeCoding above. Same input contract as
+ * analyzeCoding (today-only grounded coding_facts + transcript for evidence
+ * resolution) — the narrative is synthesized purely from those, never a
+ * second source of facts.
+ */
+export async function generateMdmNarrative(payload: {
+  codingFacts: Record<string, unknown>;
+  transcript: string;
+  visitMeta: VisitMetaInput;
+}): Promise<MdmNarrativeResponse> {
+  const res = await apiFetch(
+    `/coding/mdm-narrative`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        coding_facts: payload.codingFacts || {},
+        visit_meta: {
+          new_patient: !!payload.visitMeta.new_patient,
+          total_time_minutes: payload.visitMeta.total_time_minutes ?? undefined,
+          place_of_service: payload.visitMeta.place_of_service || undefined,
+        },
+        transcript: payload.transcript || '',
+      }),
+    },
+    MDM_NARRATIVE_TIMEOUT_MS,
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`MDM narrative generation failed (${res.status}): ${text || res.statusText}`);
   }
 
   return res.json();

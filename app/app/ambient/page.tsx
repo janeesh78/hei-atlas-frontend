@@ -10,6 +10,7 @@ import {
   transcribeAudioSafe,
   generateNote,
   analyzeCoding,
+  generateMdmNarrative,
   getTrials,
   pingBackend,
   type OncologyNote,
@@ -184,6 +185,16 @@ export default function Home() {
   const [backendCodingLoading, setBackendCodingLoading] = useState(false);
   const [backendCodingError, setBackendCodingError] = useState<string | null>(null);
   const [backendCodingStale, setBackendCodingStale] = useState(false);
+  // MDM narrative — on-demand only (a physician click via "Generate MDM
+  // statement" in BackendCodingPanel), never auto-fired alongside the
+  // analyze pass above. Deliberately separate state, not folded into
+  // backendCoding: generating it must not touch codingDecisions (accept/
+  // dismiss review state), which runBackendCoding resets on every fresh
+  // report — a physician's already-made decisions shouldn't vanish just
+  // because they asked for a narrative afterward.
+  const [mdmNarrative, setMdmNarrative] = useState<string | null>(null);
+  const [mdmNarrativeLoading, setMdmNarrativeLoading] = useState(false);
+  const [mdmNarrativeError, setMdmNarrativeError] = useState<string | null>(null);
   // Per-item accept/dismiss review state, keyed the same way
   // BackendCodingPanel keys its list items. Lifted here (not local to the
   // panel) so it survives autosave/restore.
@@ -277,6 +288,8 @@ export default function Home() {
     setTotalTimeMinutes(null);
     setPlaceOfService('');
     backendCodingSigRef.current = '';
+    setMdmNarrative(null);
+    setMdmNarrativeError(null);
     skipBackendCodingForIdRef.current = null;
     setLastSavedEncounterId(null);
     setTrialsRequested(false);
@@ -1705,6 +1718,30 @@ export default function Home() {
     if (note) runBackendCoding(note, transcript);
   };
 
+  const handleGenerateMdmNarrative = async () => {
+    if (!note?.coding_facts) return;
+    setMdmNarrativeLoading(true);
+    setMdmNarrativeError(null);
+    try {
+      const { narrative } = await generateMdmNarrative({
+        codingFacts: note.coding_facts,
+        transcript,
+        visitMeta: {
+          new_patient: newPatientVisit,
+          total_time_minutes: totalTimeMinutes,
+          place_of_service: placeOfService || undefined,
+        },
+      });
+      setMdmNarrative(narrative);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'MDM narrative generation failed.';
+      setMdmNarrativeError(msg);
+      console.warn('[coding:mdm-narrative] failed:', msg);
+    } finally {
+      setMdmNarrativeLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Restoring a saved visit already hydrated backendCoding + codingDecisions
     // directly — skip this firing so it doesn't immediately overwrite them
@@ -2091,6 +2128,10 @@ export default function Home() {
               onRecalculateCoding={handleRecalculateCoding}
               codingDecisions={codingDecisions}
               onCodingDecisionsChange={setCodingDecisions}
+              mdmNarrative={mdmNarrative}
+              mdmNarrativeLoading={mdmNarrativeLoading}
+              mdmNarrativeError={mdmNarrativeError}
+              onGenerateMdmNarrative={handleGenerateMdmNarrative}
             />
           )}
 

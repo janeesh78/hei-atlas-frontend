@@ -24,6 +24,12 @@ interface BackendCodingPanelProps {
    *  never by this component, to avoid a restore-then-immediately-cleared race. */
   decisions: Record<string, CodingDecision>;
   onDecisionsChange: (decisions: Record<string, CodingDecision>) => void;
+  /** MDM narrative — on-demand only (a physician click), never auto-fired
+   *  alongside `loading`/`report` above. See onGenerateMdmNarrative. */
+  mdmNarrative: string | null;
+  mdmNarrativeLoading: boolean;
+  mdmNarrativeError: string | null;
+  onGenerateMdmNarrative: () => void;
 }
 
 const POS_OPTIONS = [
@@ -108,9 +114,25 @@ export default function BackendCodingPanel({
   stale,
   decisions,
   onDecisionsChange,
+  mdmNarrative,
+  mdmNarrativeLoading,
+  mdmNarrativeError,
+  onGenerateMdmNarrative,
 }: BackendCodingPanelProps) {
   const [attested, setAttested] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
+  const [narrativeCopyState, setNarrativeCopyState] = useState<'idle' | 'copied'>('idle');
+
+  const handleCopyNarrative = async () => {
+    if (!mdmNarrative) return;
+    try {
+      await navigator.clipboard.writeText(mdmNarrative);
+      setNarrativeCopyState('copied');
+      setTimeout(() => setNarrativeCopyState('idle'), 2000);
+    } catch (err) {
+      console.error('Copy MDM narrative failed:', err);
+    }
+  };
 
   // Attestation is deliberately NOT lifted/persisted — re-opening a saved
   // visit (or getting a fresh report) should always require a fresh
@@ -434,6 +456,63 @@ export default function BackendCodingPanel({
               </button>
               <p className="text-[11px] text-gray-500">{report.disclaimer}</p>
             </div>
+          </div>
+
+          {/* MDM narrative — on-demand only, not part of the automatic
+              analyze pass above (extra LLM call; most encounters don't need
+              it). Lives here, not in the note body, per prior physician
+              feedback that removed MDM from the note itself. */}
+          <div className="border border-gray-200 rounded-xl p-4 bg-white space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.08em]">
+                MDM Narrative
+              </h4>
+              <button
+                type="button"
+                onClick={onGenerateMdmNarrative}
+                disabled={mdmNarrativeLoading}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {mdmNarrativeLoading
+                  ? 'Generating…'
+                  : mdmNarrative
+                  ? 'Regenerate'
+                  : 'Generate MDM statement'}
+              </button>
+            </div>
+
+            {mdmNarrativeError && (
+              <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-sm text-amber-800">
+                {mdmNarrativeError}
+              </div>
+            )}
+
+            {mdmNarrativeLoading && !mdmNarrative && (
+              <div className="flex items-center gap-3 py-2">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm text-gray-700">Drafting a narrative from today&rsquo;s coding facts…</p>
+              </div>
+            )}
+
+            {mdmNarrative && (
+              <>
+                <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                  {mdmNarrative}
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCopyNarrative}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    {narrativeCopyState === 'copied' ? 'Copied' : 'Copy narrative'}
+                  </button>
+                  <p className="text-[11px] text-gray-500">
+                    AI-drafted from today&rsquo;s coding facts — review before using for billing documentation.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

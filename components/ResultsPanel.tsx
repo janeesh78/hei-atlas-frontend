@@ -47,6 +47,12 @@ interface ResultsPanelProps {
   onRecalculateCoding: () => void;
   codingDecisions: Record<string, CodingDecision>;
   onCodingDecisionsChange: (decisions: Record<string, CodingDecision>) => void;
+  // MDM narrative (POST /coding/mdm-narrative) — on-demand only, separate
+  // from the automatic backendCoding analyze pass above.
+  mdmNarrative: string | null;
+  mdmNarrativeLoading: boolean;
+  mdmNarrativeError: string | null;
+  onGenerateMdmNarrative: () => void;
 }
 
 const NOT_DOCUMENTED = 'Not documented in encounter.';
@@ -1771,6 +1777,10 @@ export default function ResultsPanel({
   onRecalculateCoding,
   codingDecisions,
   onCodingDecisionsChange,
+  mdmNarrative,
+  mdmNarrativeLoading,
+  mdmNarrativeError,
+  onGenerateMdmNarrative,
 }: ResultsPanelProps) {
   const [editing, setEditing] = useState(false);
   const [editedSections, setEditedSections] = useState<Record<string, string>>({});
@@ -2114,6 +2124,10 @@ export default function ResultsPanel({
                 stale={backendCodingStale}
                 decisions={codingDecisions}
                 onDecisionsChange={onCodingDecisionsChange}
+                mdmNarrative={mdmNarrative}
+                mdmNarrativeLoading={mdmNarrativeLoading}
+                mdmNarrativeError={mdmNarrativeError}
+                onGenerateMdmNarrative={onGenerateMdmNarrative}
               />
             )}
           </>
