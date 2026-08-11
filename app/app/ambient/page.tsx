@@ -1320,8 +1320,20 @@ export default function Home() {
     // Standby recovery: if a previous session saved a draft (device slept and
     // the OS killed the tab mid-recording), feed it into the normal upload
     // queue so the captured audio still becomes a transcript.
+    //
+    // Threshold lowered 4096 -> 256 (feedback 2026-08-08): verified directly
+    // that Opus/WebM compresses TRUE digital silence to well under 4096
+    // bytes even for several seconds of audio (a real 5s clip measured
+    // ~1.6KB), while realistic microphone input — which always has some
+    // noise floor, never true silence — comfortably clears 4096B (~94KB for
+    // the same 5s). So 4096B wasn't filtering "not worth recovering" junk,
+    // it was capable of discarding a real, short-but-genuine recording
+    // (e.g. a near-silent room, or a refresh right after the new 2s early
+    // flush above) while silently reporting nothing — no log, no ping, the
+    // recording just vanished. 256B still filters an empty/corrupt blob;
+    // it's not a realistic size for any actual audio content.
     takeStandbyDraft().then((draft) => {
-      if (!draft || draft.blob.size < 4096) return;
+      if (!draft || draft.blob.size < 256) return;
       console.log(`[standby] recovering draft: ${draft.blob.size} bytes, ~${draft.durationSec}s`);
       pingBackend('standby:draft-recovered', {
         sizeBytes: draft.blob.size,
@@ -1405,6 +1417,16 @@ export default function Home() {
   // lost the whole encounter, not just the last 30s (feedback 2026-07-28).
   // A one-shot flush shortly after start/resume closes that gap without
   // changing the steady-state write cadence for long recordings.
+  //
+  // The first version of this used 5s. Real alpha testing still lost the
+  // encounter (feedback 2026-08-08): refreshing within the first ~5s — an
+  // obvious first thing to try when testing "does this survive a refresh"
+  // — landed in the window before that single early flush had fired.
+  // Shortened to 2s; there's no real cost to going shorter here (this is a
+  // one-time delay before the FIRST flush, not the recurring interval that
+  // was deliberately kept at 30s for write-volume reasons on long
+  // recordings), so it isn't worth trying to tune this further — 2s is
+  // close to as tight as a timer-based approach usefully gets.
   useEffect(() => {
     if (!isListening || isPaused) return;
     const flushNow = () => {
@@ -1414,7 +1436,7 @@ export default function Home() {
         try { mr.requestData(); } catch { /* unsupported */ }
       }
     };
-    const early = setTimeout(flushNow, 5_000);
+    const early = setTimeout(flushNow, 2_000);
     const iv = setInterval(flushNow, 30_000);
     return () => { clearTimeout(early); clearInterval(iv); };
   }, [isListening, isPaused]);
