@@ -12,7 +12,7 @@
 
 // Bump on any SW logic change OR when a same-URL static asset (globe.png,
 // world.jpg) changes bytes — this triggers cache purge in the activate handler.
-const CACHE = 'hei-atlas-shell-v8';
+const CACHE = 'hei-atlas-shell-v9';
 
 // Files we want available offline. We don't enumerate Next.js chunks here
 // because their hashed names are unstable across builds — those are cached
@@ -83,7 +83,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       (async () => {
         const cached = await caches.match('/');
-        const network = fetch(request).then((res) => {
+        // `cache: 'reload'` forces this past the browser's own HTTP cache —
+        // without it, "network-first" can be silently satisfied by a stale
+        // pre-deploy response the browser cached earlier, defeating the
+        // whole point of this branch (a reload after a deploy still served
+        // the old document, including old response headers like CSP).
+        const network = fetch(request, { cache: 'reload' }).then((res) => {
           // Refresh the shell key only from the real landing document —
           // route HTML (/app/ambient etc.) must not overwrite it.
           if (res && res.status === 200 && new URL(request.url).pathname === '/') {
