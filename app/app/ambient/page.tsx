@@ -1409,24 +1409,30 @@ export default function Home() {
   }, []);
 
   // Rolling draft: while actively recording, refresh the IndexedDB snapshot
-  // every 30 s so at most half a minute of audio is at risk if the OS kills
+  // every 5 s so at most a few seconds of audio is at risk if the OS kills
   // the tab without firing any lifecycle event. The recurring interval alone
-  // left a full 30s dead zone with ZERO draft protection at the start of
-  // every recording (and after every pause/resume, since this effect
-  // re-runs on that transition too) — a refresh in that window silently
-  // lost the whole encounter, not just the last 30s (feedback 2026-07-28).
-  // A one-shot flush shortly after start/resume closes that gap without
-  // changing the steady-state write cadence for long recordings.
+  // left a dead zone with ZERO draft protection at the start of every
+  // recording (and after every pause/resume, since this effect re-runs on
+  // that transition too) — a refresh in that window silently lost the whole
+  // encounter, not just the steady-state gap (feedback 2026-07-28). A
+  // one-shot flush shortly after start/resume closes that gap without
+  // changing the recurring cadence.
   //
-  // The first version of this used 5s. Real alpha testing still lost the
-  // encounter (feedback 2026-08-08): refreshing within the first ~5s — an
-  // obvious first thing to try when testing "does this survive a refresh"
-  // — landed in the window before that single early flush had fired.
-  // Shortened to 2s; there's no real cost to going shorter here (this is a
-  // one-time delay before the FIRST flush, not the recurring interval that
-  // was deliberately kept at 30s for write-volume reasons on long
-  // recordings), so it isn't worth trying to tune this further — 2s is
-  // close to as tight as a timer-based approach usefully gets.
+  // The first version of this used a 5s one-shot + 30s recurring interval.
+  // Real alpha testing still lost most of the encounter (feedback
+  // 2026-08-11): a live recovered draft showed durationSec=2 — only the
+  // one-shot flush had ever landed, meaning the interruption happened
+  // somewhere between 2s and 30s, and every word spoken in that window was
+  // captured by MediaRecorder in memory but never persisted, so it vanished
+  // with the tab. Shortening the one-shot flush (5s -> 2s, feedback
+  // 2026-08-08) only ever protected the START of a recording; it did
+  // nothing for this steady-state gap. The recurring interval itself needed
+  // tightening. 30s was chosen for write-volume reasons that predate the
+  // append-only redesign above (each tick now persists only the new delta,
+  // not the whole recording), so the actual cost of a shorter interval is
+  // just more small, cheap writes — tightened to 5s to match the one-shot
+  // flush's cadence and bound worst-case loss to a few seconds instead of
+  // up to half a minute.
   useEffect(() => {
     if (!isListening || isPaused) return;
     const flushNow = () => {
@@ -1437,7 +1443,7 @@ export default function Home() {
       }
     };
     const early = setTimeout(flushNow, 2_000);
-    const iv = setInterval(flushNow, 30_000);
+    const iv = setInterval(flushNow, 5_000);
     return () => { clearTimeout(early); clearInterval(iv); };
   }, [isListening, isPaused]);
 
