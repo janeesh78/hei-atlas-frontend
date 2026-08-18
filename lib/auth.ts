@@ -203,6 +203,21 @@ export interface SavedEncounterFull extends SavedEncounter {
   coding: Record<string, unknown> | null;
   toxicities: Record<string, unknown>[] | null;
 }
+// The backend's "today" window defaults to the UTC calendar day, which
+// rolls over at 8pm US Eastern — a physician's encounter recorded during a
+// normal evening clinic could silently drop off "today's" list an hour
+// later (feedback 2026-08-11: "Encounters for the day is not saved after
+// logging out and logging in again" — the row was never lost, it just
+// stopped matching the UTC window). Sending the browser's own local
+// calendar day, as UTC instant bounds, tells the backend what "today"
+// actually means for this physician's workday.
+function localDayWindowParams(): URLSearchParams {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return new URLSearchParams({ start: start.toISOString(), end: end.toISOString() });
+}
+
 export async function saveEncounter(payload: {
   patient_ref?: string;
   output_format: string;
@@ -211,7 +226,7 @@ export async function saveEncounter(payload: {
   coding?: Record<string, unknown>;
   toxicities?: Record<string, unknown>[];
 }): Promise<SavedEncounter> {
-  return authedFetch<SavedEncounter>('/encounters', {
+  return authedFetch<SavedEncounter>(`/encounters?${localDayWindowParams()}`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -269,7 +284,7 @@ export function normalizePersistedCoding(raw: unknown): {
   };
 }
 export async function listTodayEncounters(): Promise<SavedEncounter[]> {
-  return authedFetch<SavedEncounter[]>('/encounters');
+  return authedFetch<SavedEncounter[]>(`/encounters?${localDayWindowParams()}`);
 }
 export async function getEncounter(id: string): Promise<SavedEncounterFull> {
   return authedFetch<SavedEncounterFull>(`/encounters/${id}`);
