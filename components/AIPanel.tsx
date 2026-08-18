@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, KeyboardEvent } from 'react';
-import type { OncologyNote } from '@/lib/api';
+import type { OncologyNote, AskSource } from '@/lib/api';
 import type { CodingResult } from '@/lib/coding';
 import type { ToxicityFinding } from '@/lib/ctcae';
 
@@ -25,6 +25,10 @@ interface AIPanelProps {
    *  in this column, directly below the search box. Never touches the note. */
   askQuestion?: string | null;
   askAnswer?: string | null;
+  /** Web sources the model actually cited for askAnswer — see
+   *  services/claude_service.answer_note_question (backend). Empty when the
+   *  question didn't call for a search. */
+  askSources?: AskSource[];
   askLoading?: boolean;
   askError?: string | null;
 
@@ -100,6 +104,7 @@ export default function AIPanel({
   transcript,
   askQuestion,
   askAnswer,
+  askSources,
   askLoading,
   askError,
   extraWidgets,
@@ -219,6 +224,29 @@ export default function AIPanel({
               <p className="text-[14px] text-ink leading-relaxed whitespace-pre-wrap">
                 {askAnswer}
               </p>
+            )}
+            {!!askSources?.length && !askLoading && (
+              <div className="pt-1 border-t border-rule space-y-1.5">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wide">
+                  Sources
+                </p>
+                {askSources.map((s, i) => (
+                  <a
+                    key={`${s.url}-${i}`}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-1.5 text-[12.5px] text-muted hover:text-accent transition-colors duration-150"
+                  >
+                    <Icon
+                      name="external"
+                      size={12}
+                      className="flex-shrink-0 text-muted/60 group-hover:text-accent transition-colors duration-150"
+                    />
+                    <span className="truncate">{s.title}</span>
+                  </a>
+                ))}
+              </div>
             )}
           </div>
         )}

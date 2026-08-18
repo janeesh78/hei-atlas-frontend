@@ -18,6 +18,7 @@ import {
   type CdsResponse,
   type OutputFormat,
   type CodingReport,
+  type AskSource,
 } from '@/lib/api';
 import { RecordingQueue, saveStandbyPart, takeStandbyDraft, clearStandbyDraft, type PendingRecording } from '@/lib/recordingQueue';
 import { reprobeApiBase } from '@/lib/apiBase';
@@ -201,6 +202,7 @@ export default function Home() {
   // slot, rendered in AIPanel (right column), never touching note/transcript.
   const [askQuestion, setAskQuestion] = useState<string | null>(null);
   const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const [askSources, setAskSources] = useState<AskSource[]>([]);
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
   // Per-item accept/dismiss review state, keyed the same way
@@ -300,6 +302,7 @@ export default function Home() {
     setMdmNarrativeError(null);
     setAskQuestion(null);
     setAskAnswer(null);
+    setAskSources([]);
     setAskError(null);
     skipBackendCodingForIdRef.current = null;
     setLastSavedEncounterId(null);
@@ -1810,11 +1813,13 @@ export default function Home() {
   const askAboutCurrentNote = async (question: string) => {
     setAskQuestion(question);
     setAskAnswer(null);
+    setAskSources([]);
     setAskError(null);
     setAskLoading(true);
     try {
-      const { answer } = await askAboutNote({ question, transcript, note });
+      const { answer, sources } = await askAboutNote({ question, transcript, note });
       setAskAnswer(answer);
+      setAskSources(sources || []);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to get an answer.';
       setAskError(msg);
@@ -2258,6 +2263,7 @@ export default function Home() {
             transcript={transcript}
             askQuestion={askQuestion}
             askAnswer={askAnswer}
+            askSources={askSources}
             askLoading={askLoading}
             askError={askError}
             extraWidgets={

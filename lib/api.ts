@@ -33,8 +33,9 @@ const MDM_NARRATIVE_TIMEOUT_MS = 90_000;
 
 // /notes/ask (the "AI Quick Actions" answers) is the same shape of problem
 // again — a single synchronous Claude call — so it gets the same generous
-// timeout up front.
-const ASK_NOTE_TIMEOUT_MS = 90_000;
+// timeout up front. Bumped past the other 90s endpoints because this one can
+// now run live web searches (up to 5 per question) before answering.
+const ASK_NOTE_TIMEOUT_MS = 120_000;
 
 /**
  * Fire-and-forget telemetry ping to the backend. Used to track frontend
@@ -239,8 +240,16 @@ export async function generateNote(
   return res.json();
 }
 
+export interface AskSource {
+  title: string;
+  url: string;
+}
+
 export interface AskNoteResponse {
   answer: string;
+  /** Web sources the model actually cited — empty when the question didn't
+   *  call for a search. */
+  sources: AskSource[];
   disclaimer: string;
 }
 
