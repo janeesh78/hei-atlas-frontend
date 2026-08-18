@@ -31,6 +31,11 @@ const TRANSCRIPTION_TIMEOUT_MS = 300_000;
 // waiting to rediscover the exact same 8s-abort bug a third time.
 const MDM_NARRATIVE_TIMEOUT_MS = 90_000;
 
+// /notes/ask (the "AI Quick Actions" answers) is the same shape of problem
+// again — a single synchronous Claude call — so it gets the same generous
+// timeout up front.
+const ASK_NOTE_TIMEOUT_MS = 90_000;
+
 /**
  * Fire-and-forget telemetry ping to the backend. Used to track frontend
  * pipeline progress in the backend log so we can diagnose silent stalls
@@ -229,6 +234,44 @@ export async function generateNote(
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Note generation failed (${res.status}): ${text || res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export interface AskNoteResponse {
+  answer: string;
+  disclaimer: string;
+}
+
+/**
+ * POST /notes/ask — answers a question about the CURRENTLY OPEN encounter
+ * (the "AI Quick Actions" buttons and the free-text search box). Purely
+ * read-only: unlike generateNote above, this never creates or replaces a
+ * note — it grounds its answer in whatever transcript/note is already there.
+ */
+export async function askAboutNote(payload: {
+  question: string;
+  transcript?: string;
+  note?: OncologyNote | null;
+}): Promise<AskNoteResponse> {
+  const res = await apiFetch(
+    `/notes/ask`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        question: payload.question,
+        transcript: payload.transcript || undefined,
+        note: payload.note || undefined,
+      }),
+    },
+    ASK_NOTE_TIMEOUT_MS,
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Couldn't get an answer (${res.status}): ${text || res.statusText}`);
   }
 
   return res.json();

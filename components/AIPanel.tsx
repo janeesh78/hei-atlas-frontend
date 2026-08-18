@@ -20,6 +20,14 @@ interface AIPanelProps {
   toxicities?: ToxicityFinding[];
   transcript?: string;
 
+  /** The answer to the last question asked via the search box or a Quick
+   *  Action button (see routeQuery in app/app/ambient/page.tsx) — rendered
+   *  in this column, directly below the search box. Never touches the note. */
+  askQuestion?: string | null;
+  askAnswer?: string | null;
+  askLoading?: boolean;
+  askError?: string | null;
+
   /** Optional slot rendered after Visit Insights (e.g. location widget). */
   extraWidgets?: React.ReactNode;
 }
@@ -90,6 +98,10 @@ export default function AIPanel({
   coding,
   toxicities,
   transcript,
+  askQuestion,
+  askAnswer,
+  askLoading,
+  askError,
   extraWidgets,
 }: AIPanelProps) {
   const [focused, setFocused] = useState(false);
@@ -180,6 +192,36 @@ export default function AIPanel({
             </button>
           )}
         </div>
+
+        {/* ── Ask Atlas answer — the search box / Quick Action buttons ask a
+            question about the CURRENTLY OPEN encounter; the answer renders
+            here, in this column, and never touches the note. ── */}
+        {(askLoading || askAnswer || askError) && (
+          <div className="border border-rule rounded-card bg-surface p-4 space-y-3">
+            {askQuestion && (
+              <div className="flex items-center gap-2.5">
+                <span className="flex-shrink-0 w-7 h-7 rounded-button bg-accent-subtle text-accent flex items-center justify-center">
+                  <Icon name="sparkle" size={14} />
+                </span>
+                <p className="text-[13px] font-semibold text-ink">{askQuestion}</p>
+              </div>
+            )}
+            {askLoading && (
+              <div className="flex items-center gap-3 py-1">
+                <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <p className="text-[14px] text-muted">Thinking…</p>
+              </div>
+            )}
+            {askError && !askLoading && (
+              <p className="text-[13px] text-red-700">{askError}</p>
+            )}
+            {askAnswer && !askLoading && (
+              <p className="text-[14px] text-ink leading-relaxed whitespace-pre-wrap">
+                {askAnswer}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* ── AI Quick Actions ── */}
         <Section title="AI Quick Actions">

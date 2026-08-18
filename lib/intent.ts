@@ -201,7 +201,7 @@ function extractDisease(normalized: string): string {
  * "show me", "i need") backfired: those phrases inevitably appear in
  * conversational ambient transcripts and caused encounters to be misrouted.
  */
-const SHORT_QUERY_CHARS = 200;
+export const SHORT_QUERY_CHARS = 200;
 
 /** Classify a query into an intent and pull out the disease term. */
 export function classifyQuery(query: string): Classification {

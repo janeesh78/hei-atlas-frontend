@@ -11,6 +11,7 @@ import {
   generateNote,
   analyzeCoding,
   generateMdmNarrative,
+  askAboutNote,
   getTrials,
   pingBackend,
   type OncologyNote,
@@ -23,7 +24,7 @@ import { reprobeApiBase } from '@/lib/apiBase';
 import PendingUploadsPanel from '@/components/PendingUploadsPanel';
 import { matchCitations } from '@/lib/citations';
 import { fetchNearbyTrials, type NearbyTrial } from '@/lib/trials';
-import { classifyQuery, type Intent } from '@/lib/intent';
+import { classifyQuery, SHORT_QUERY_CHARS, type Intent } from '@/lib/intent';
 import { extractAndGradeToxicities, type ToxicityFinding } from '@/lib/ctcae';
 import { analyzeNoteForCoding, type CodingResult } from '@/lib/coding';
 import { useSession } from '@/lib/session';
@@ -195,6 +196,13 @@ export default function Home() {
   const [mdmNarrative, setMdmNarrative] = useState<string | null>(null);
   const [mdmNarrativeLoading, setMdmNarrativeLoading] = useState(false);
   const [mdmNarrativeError, setMdmNarrativeError] = useState<string | null>(null);
+  // "Ask Atlas" answers — the AI Quick Actions buttons + free-text search box
+  // ask a question ABOUT the currently open encounter; this is the answer
+  // slot, rendered in AIPanel (right column), never touching note/transcript.
+  const [askQuestion, setAskQuestion] = useState<string | null>(null);
+  const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
   // Per-item accept/dismiss review state, keyed the same way
   // BackendCodingPanel keys its list items. Lifted here (not local to the
   // panel) so it survives autosave/restore.
@@ -290,6 +298,9 @@ export default function Home() {
     backendCodingSigRef.current = '';
     setMdmNarrative(null);
     setMdmNarrativeError(null);
+    setAskQuestion(null);
+    setAskAnswer(null);
+    setAskError(null);
     skipBackendCodingForIdRef.current = null;
     setLastSavedEncounterId(null);
     setTrialsRequested(false);
@@ -601,6 +612,23 @@ export default function Home() {
     setTranscript(query);
     setLoading(true);
     await runPipelineFromTranscript(query);
+  };
+
+  // Routes a typed/clicked query from the AIPanel search box or a Quick
+  // Action button. A trial search or a long pasted transcript still runs the
+  // full note/trial pipeline via runFromText (unchanged, existing
+  // behavior) — everything else is a QUESTION about the currently open
+  // encounter, answered in place via askAboutCurrentNote without touching
+  // note/transcript. classifyQuery only ever returns 'clinical_trial_search'
+  // for queries <= SHORT_QUERY_CHARS (see lib/intent.ts), so this check is
+  // equivalent to "is this short AND classified as a trial search".
+  const routeQuery = (query: string) => {
+    const classification = classifyQuery(query);
+    if (classification.intent === 'clinical_trial_search' || query.length > SHORT_QUERY_CHARS) {
+      runFromText(query);
+    } else {
+      askAboutCurrentNote(query);
+    }
   };
 
   const runFromAudio = async (audioBlob: Blob) => {
@@ -1770,6 +1798,32 @@ export default function Home() {
     }
   };
 
+  // Answers a question about the CURRENTLY OPEN encounter — the AI Quick
+  // Actions buttons and the free-text search box, for anything that isn't a
+  // clinical-trial search or a pasted transcript (see the routing check at
+  // the AIPanel call site below). Deliberately does NOT touch
+  // note/transcript/results — previously these prompts ran through
+  // runFromText, which reset the whole encounter and generated a new,
+  // content-free note from the prompt text itself (feedback 2026-08-17: all
+  // 10 Quick Actions buttons wiped the current note and produced a
+  // "Not documented in encounter" placeholder note).
+  const askAboutCurrentNote = async (question: string) => {
+    setAskQuestion(question);
+    setAskAnswer(null);
+    setAskError(null);
+    setAskLoading(true);
+    try {
+      const { answer } = await askAboutNote({ question, transcript, note });
+      setAskAnswer(answer);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to get an answer.';
+      setAskError(msg);
+      console.warn('[ask] failed:', msg);
+    } finally {
+      setAskLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Restoring a saved visit already hydrated backendCoding + codingDecisions
     // directly — skip this firing so it doesn't immediately overwrite them
@@ -2187,15 +2241,13 @@ export default function Home() {
             onSubmit={() => {
               if (searchQuery.trim()) {
                 const q = searchQuery.trim();
-                runFromText(q);
+                routeQuery(q);
                 setSearchQuery('');
                 setMobileAIOpen(false);
               }
             }}
             onSelectPrompt={(p) => {
-              setSearchQuery(p);
-              runFromText(p);
-              setSearchQuery('');
+              routeQuery(p);
               setMobileAIOpen(false);
             }}
             onMicrophoneClick={handleMicrophoneClick}
@@ -2204,6 +2256,10 @@ export default function Home() {
             coding={coding}
             toxicities={toxicities}
             transcript={transcript}
+            askQuestion={askQuestion}
+            askAnswer={askAnswer}
+            askLoading={askLoading}
+            askError={askError}
             extraWidgets={
               <div className="space-y-3">
                 <div className="ds-card p-4">
