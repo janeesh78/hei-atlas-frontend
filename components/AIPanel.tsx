@@ -110,7 +110,17 @@ export default function AIPanel({
       { label: 'Biomarkers reviewed',           met: /\b(?:egfr|alk|kras|her2|brca|pd[- ]?l1|msi|tmb|ros1|braf|ngs)\b/i.test(corpus) },
       { label: 'ECOG documented',               met: !!note?.ecog_status?.trim() || /\becog\s*(?:performance\s+status\s*)?[0-4]\b/i.test(corpus) },
       { label: 'Treatment intent identified',   met: /\b(?:curative|palliative|adjuvant|neoadjuvant|consolidation|maintenance)\b/i.test(corpus) },
-      { label: 'Toxicities assessed',           met: !!(toxicities && toxicities.length >= 0 && (toxicities.length > 0 || /toxicit|side\s+effect|tolerat/i.test(corpus))) },
+      // Falls back to a text scan when the structured CTCAE array is empty —
+      // the note can document toxicities in prose (e.g. an Assessment/Plan
+      // problem written as "Chemotherapy-induced diarrhea, CTCAE Grade 1")
+      // without the client-side extractor having matched anything. The old
+      // fallback only recognized "toxicit"/"side effect"/"tolerat", missing
+      // this app's own CTCAE vocabulary entirely — a note with three clearly
+      // documented, graded toxicities still showed this as unmet (feedback
+      // 2026-08-17, note note_1786974784_728f4ef2). Deliberately NOT bare
+      // "grade N" — that also means tumor/histologic grade in oncology notes
+      // and would false-positive on e.g. "grade 3 adenocarcinoma".
+      { label: 'Toxicities assessed',           met: (toxicities?.length ?? 0) > 0 || /toxicit|side\s+effect|tolerat|ctcae|adverse\s+event|irae\b|(?:chemo(?:therapy)?|treatment|drug|therapy|immunotherapy|radiation)[- ]induced/i.test(corpus) },
       { label: 'Follow-up interval documented', met: !!note?.follow_up?.trim() && note.follow_up.length > 10 },
       { label: 'Clinical trial eligibility reviewed', met: /\b(?:clinical\s+trial|nct\d|eligibility|enrollment)\b/i.test(corpus) },
     ];
