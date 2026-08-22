@@ -114,6 +114,7 @@ function buildSections(note: OncologyNote, format: OutputFormat): Section[] {
         { label: 'Laboratory Data / Imaging', value: note.lab_imaging_review || '' },
         { label: 'Assessment', value: note.assessment || '' },
         { label: 'Plan', value: note.plan || '' },
+        { label: 'Follow-up', value: note.follow_up || '' },
       ];
 
     case 'Consultation':
@@ -123,6 +124,8 @@ function buildSections(note: OncologyNote, format: OutputFormat): Section[] {
         { label: 'History of Present Illness', value: note.history_present_illness || '' },
         { label: 'Oncologic History', value: oncoHx },
         { label: 'Prior Oncologic Therapy', value: note.prior_oncologic_therapy || '' },
+        { label: 'Medications', value: note.current_medications || '' },
+        { label: 'Allergies', value: note.allergies || '' },
         { label: 'Physical Examination', value: note.physical_examination || '' },
         { label: 'Relevant Labs / Imaging', value: note.lab_imaging_review || '' },
         { label: 'Assessment', value: note.assessment || '' },
@@ -353,6 +356,9 @@ function FollowUpNoteTemplate({
 
       <H3>Current Treatment</H3>
       <KVList items={m.currentTreatment} />
+
+      <H3>Allergies</H3>
+      <BodyBlock text={m.allergies} />
 
       {/* Tumor Markers appears only when markers were actually stated —
           an empty section is noise in a copied note (feedback 2026-07-10). */}
@@ -1055,6 +1061,7 @@ interface FollowUpModel {
   priorTherapyRaw: string;      // placeholder shown when no structured rows exist
   priorTherapyRows: { date: string; treatment: string; outcome: string }[]; // from note.prior_oncologic_therapy
   physicalExam: string;         // from note.physical_examination
+  allergies: string;            // from note.allergies
   labsReview: string;           // laboratory results only — split from imaging (feedback 2026-07-09)
   imagingReview: string;
   imagingEntries: ImagingEntry[];   // structured chronological entries (merged current + previous)
@@ -1082,6 +1089,7 @@ function buildFollowUpModel(
     assessment: decodeHtmlEntities(note.assessment || ''),
     plan: decodeHtmlEntities(note.plan || ''),
     current_medications: decodeHtmlEntities(note.current_medications || ''),
+    allergies: decodeHtmlEntities(note.allergies || ''),
     physical_examination: decodeHtmlEntities(note.physical_examination || ''),
     lab_imaging_review: decodeHtmlEntities(note.lab_imaging_review || ''),
     laboratory_review: note.laboratory_review != null ? decodeHtmlEntities(note.laboratory_review) : note.laboratory_review,
@@ -1097,6 +1105,7 @@ function buildFollowUpModel(
   const meds = or(note.current_medications);
   const followUp = or(note.follow_up);
   const physicalExam = or(note.physical_examination);
+  const allergies = or(note.allergies);
 
   // Labs vs imaging: the backend emits separate laboratory_review /
   // imaging_review fields since 2026-07-09. The heuristic sentence splitter is
@@ -1278,6 +1287,7 @@ function buildFollowUpModel(
       })
       .filter((r) => r.treatment || r.date),
     physicalExam,
+    allergies,
     labsReview: labsText || NOT_DOC,
     imagingReview: imagingText || NOT_DOC,
     imagingEntries: mergeImagingEntries(
@@ -1466,6 +1476,9 @@ function serializeNote(
 
     push('\nCurrent Treatment');
     kv(m.currentTreatment);
+
+    push('\nAllergies');
+    push(m.allergies || NOT_DOC);
 
     if (m.tumorMarkers && m.tumorMarkers !== NOT_DOC) {
       push('\nTumor Markers');
