@@ -153,6 +153,17 @@ export default function Home() {
   const [loadingStage, setLoadingStage] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Patient identifier for the encounter in progress — MRN, initials, or a
+  // codename, matching what patient_ref already documents backend-side.
+  // Deliberately NOT cleared by resetResults(): that fires on every
+  // record→transcribe→generate cycle for the CURRENT patient, and clearing
+  // it there would wipe what was just typed the moment a recording stops.
+  // Only handleNewPatient (blank) and handleSelectEncounter (repopulate from
+  // the restored visit) touch it. Not sent to note generation — only to
+  // saveEncounter's patient_ref, which never reaches the LLM.
+  const [patientIdentifier, setPatientIdentifier] = useState('');
+  const patientIdentifierInputRef = useRef<HTMLInputElement>(null);
+
   // Output format + previous-note reconciliation
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('Consultation');
   const [previousNote, setPreviousNote] = useState('');
@@ -338,6 +349,7 @@ export default function Home() {
       const restoredNote = full.note as unknown as OncologyNote;
       skipAutosaveForIdRef.current = restoredNote?.note_id ?? null;
       lastAutoSaveRef.current = { id: full.id, transcript: full.transcript || '' };
+      setPatientIdentifier(full.patient_ref || '');
       if (full.output_format) setOutputFormat(full.output_format as OutputFormat);
       setTranscript(full.transcript || '');
       setNote(restoredNote);
@@ -367,6 +379,27 @@ export default function Home() {
       setLoadingStage('');
       pipelineRunningRef.current = false;
     }
+  };
+
+  // Clears the workspace for a new patient — the sidebar's "New patient"
+  // button. Mirrors handleSelectEncounter's reset (never just resetResults()
+  // alone): also drops a pasted previous note and the autosave-identity
+  // guards, so the next save can't be mistaken for an update to the
+  // departing patient's row (the "Patient E dup of Patient A" bug class).
+  // Deliberately leaves the "New pt" billing toggle untouched — that's a
+  // separate, physician-set billing decision, not tied to workspace identity.
+  // No-ops while a recording is active: discarding an in-progress recording
+  // is part of the save-for-later work, not this button.
+  const handleNewPatient = () => {
+    if (isListening) return;
+    resetResults();
+    setPreviousNote('');
+    lastMergedPreviousRef.current = '';
+    setPatientIdentifier('');
+    skipAutosaveForIdRef.current = null;
+    lastAutoSaveRef.current = null;
+    setMobileNavOpen(false);
+    patientIdentifierInputRef.current?.focus();
   };
 
   // Trial-search-only pipeline (no note generation, no guideline citations)
@@ -1621,7 +1654,7 @@ export default function Home() {
       .sort()
       .join(',');
     const visitMetaSig = `${totalTimeMinutes ?? ''}|${placeOfService}`;
-    const sig = `${note.note_id}|${outputFormat}|${codingSig}|${toxSig}|${backendCodingSig}|${decisionsSig}|${visitMetaSig}`;
+    const sig = `${note.note_id}|${outputFormat}|${codingSig}|${toxSig}|${backendCodingSig}|${decisionsSig}|${visitMetaSig}|${patientIdentifier.trim()}`;
 
     // A restored visit is already saved — record its signature and skip.
     if (skipAutosaveForIdRef.current === note.note_id) {
@@ -1651,6 +1684,7 @@ export default function Home() {
           }
         : undefined;
       saveEncounter({
+        patient_ref: patientIdentifier.trim() || undefined,
         output_format: outputFormat,
         note: note as unknown as Record<string, unknown>,
         transcript: transcript || undefined,
@@ -1684,7 +1718,7 @@ export default function Home() {
     }, 400);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note?.note_id, outputFormat, coding, toxicities, user, dailyCapReached, backendCoding, codingDecisions, totalTimeMinutes, placeOfService]);
+  }, [note?.note_id, outputFormat, coding, toxicities, user, dailyCapReached, backendCoding, codingDecisions, totalTimeMinutes, placeOfService, patientIdentifier]);
 
   // Track online/offline so the UI can show a status pill
   useEffect(() => {
@@ -1926,7 +1960,7 @@ export default function Home() {
 
       {/* ── Left sidebar (desktop fixed / mobile drawer) ───────────────── */}
       <div className="hidden lg:block w-[260px] flex-shrink-0">
-        <LeftSidebar user={user ? { name: user.name, credentials: user.credentials, email: user.email } : null} onLogout={sessionLogout} encounters={todaysEncounters} onSelectEncounter={handleSelectEncounter} />
+        <LeftSidebar user={user ? { name: user.name, credentials: user.credentials, email: user.email } : null} onLogout={sessionLogout} encounters={todaysEncounters} onSelectEncounter={handleSelectEncounter} onNewPatient={handleNewPatient} />
       </div>
       {/* Mobile drawer */}
       {mobileNavOpen && (
@@ -1943,7 +1977,7 @@ export default function Home() {
         }`}
         aria-hidden={!mobileNavOpen}
       >
-        <LeftSidebar user={user ? { name: user.name, credentials: user.credentials, email: user.email } : null} onLogout={sessionLogout} encounters={todaysEncounters} onSelectEncounter={handleSelectEncounter} />
+        <LeftSidebar user={user ? { name: user.name, credentials: user.credentials, email: user.email } : null} onLogout={sessionLogout} encounters={todaysEncounters} onSelectEncounter={handleSelectEncounter} onNewPatient={handleNewPatient} />
       </div>
 
       {/* ── Center workspace ──────────────────────────────────────────── */}
@@ -1983,6 +2017,19 @@ export default function Home() {
               />
             </div>
           </div>
+
+          {/* Patient identifier — MRN, initials, or a codename; never a
+              requirement to proceed. Drives the Recent Visits label instead
+              of the synthetic "Patient A/B/C" letter, and is saved with the
+              encounter. Not sent to note generation. */}
+          <input
+            ref={patientIdentifierInputRef}
+            type="text"
+            value={patientIdentifier}
+            onChange={(e) => setPatientIdentifier(e.target.value)}
+            placeholder="Patient identifier — MRN, initials, or codename (optional)"
+            className="w-full h-10 px-3.5 text-[14px] bg-surface border border-rule rounded-button text-ink placeholder:text-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 transition-all duration-200"
+          />
 
           {/* Output format tabs — horizontally scrollable on mobile so the
               tab labels don't wrap or truncate inside the 4-up grid. */}

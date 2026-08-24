@@ -36,6 +36,10 @@ interface LeftSidebarProps {
   onLogout?: () => void;
   encounters?: EncounterListItem[];
   onSelectEncounter?: (id: string) => void;
+  /** Clears the workspace for a new patient — distinct from the "New pt"
+   *  billing toggle in the encounter panel (established vs. new-patient E/M
+   *  coding). This button never touches that toggle. */
+  onNewPatient?: () => void;
 }
 
 // Compact initials for the profile avatar tile.
@@ -54,6 +58,7 @@ export default function LeftSidebar({
   onLogout,
   encounters,
   onSelectEncounter,
+  onNewPatient,
 }: LeftSidebarProps = {}) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -125,6 +130,19 @@ export default function LeftSidebar({
           </ul>
         </nav>
 
+        {onNewPatient && (
+          <button
+            type="button"
+            onClick={onNewPatient}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-button border border-rule text-[13px] font-medium text-ink hover:bg-canvas hover:border-accent/40 transition-colors duration-150"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m-7-7h14" />
+            </svg>
+            New patient
+          </button>
+        )}
+
         <div>
           <div className="px-3 mb-2 flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted uppercase tracking-[0.06em]">
@@ -151,7 +169,7 @@ export default function LeftSidebar({
                       className="w-full text-left px-3 py-2 rounded-button hover:bg-canvas transition-colors duration-150"
                     >
                       <div className="text-[14px] font-medium text-ink truncate">
-                        Patient {patientLetter(rank)}
+                        {e.patient_ref?.trim() || `Patient ${patientLetter(rank)}`}
                       </div>
                       <div className="text-[12px] text-muted truncate">
                         {date} · {time}
