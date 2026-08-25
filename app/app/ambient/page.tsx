@@ -289,7 +289,7 @@ export default function Home() {
   // machine and cut off real consults — removed 2026-07-09; the backend now
   // chunks audio past OpenAI's 25 MB per-request limit). While recording we
   // ping /activity/ping every 4 min: the authed call slides the server-side
-  // 15-min session TTL so the upload at stop-time never hits a 401.
+  // 30-min session TTL so the upload at stop-time never hits a 401.
   const sessionKeepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Reset everything for a new query
@@ -894,7 +894,10 @@ export default function Home() {
 
       // Slide the server session TTL for as long as the visit runs — an
       // ambient recording generates no clicks or API calls, and a consult
-      // longer than 15 min would otherwise outlive its session token.
+      // longer than 30 min would otherwise outlive its session token. The
+      // matching visibilitychange handler below covers the gap this plain
+      // interval can't: a backgrounded tab can have its timers throttled
+      // or fully suspended, silently starving this ping past the TTL.
       sessionKeepAliveRef.current = setInterval(() => {
         void pingActivity();
       }, 4 * 60 * 1000);
@@ -1448,8 +1451,17 @@ export default function Home() {
       }
     };
     const onVis = () => {
+      // sessionKeepAliveRef is only non-null while a recording is active or
+      // paused (see startRecording/pauseRecording) — the same window where
+      // the plain 4-min interval above is relied on to slide the session.
+      // A backgrounded tab can have that interval throttled or fully
+      // suspended, so ping explicitly on both edges of the transition: once
+      // right before backgrounding (maximizes the window before throttling
+      // can hit) and once immediately on return (catches up on whatever the
+      // interval missed while hidden).
       if (document.visibilityState === 'hidden') {
         flushDraft();
+        if (sessionKeepAliveRef.current) void pingActivity();
       } else {
         // Back in the foreground: re-arm the keep-alives.
         keepAliveCtxRef.current?.resume().catch(() => {});
@@ -1459,6 +1471,7 @@ export default function Home() {
             nav.wakeLock?.request('screen').then((lock) => { wakeLockRef.current = lock; }).catch(() => {});
           } catch { /* unsupported */ }
         }
+        if (sessionKeepAliveRef.current) void pingActivity();
       }
     };
     document.addEventListener('visibilitychange', onVis);
