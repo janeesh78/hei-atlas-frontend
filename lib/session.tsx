@@ -154,6 +154,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const events: (keyof DocumentEventMap)[] = ['mousedown', 'keydown', 'touchstart', 'wheel'];
     events.forEach((e) => document.addEventListener(e, mark, { passive: true }));
 
+    // mousemove/scroll cover pure reading — a physician scrolling through a
+    // long note or just moving the mouse while reading was previously
+    // indistinguishable from having stepped away, and got logged out mid-read
+    // (field report 2026-08-26). Both fire far more often than a real click,
+    // so throttle the expensive part (localStorage write + re-render) to
+    // once per 5s — that's still effectively instant against a 30-min
+    // window. `scroll` doesn't bubble like the other events above, so it's
+    // registered on the capture phase to also catch scrolling inside a
+    // nested panel (e.g. the notes/results column), not just the page itself.
+    let lastHighFreqMark = 0;
+    const markThrottled = () => {
+      const now = Date.now();
+      if (now - lastHighFreqMark < 5_000) return;
+      lastHighFreqMark = now;
+      mark();
+    };
+    document.addEventListener('mousemove', markThrottled, { passive: true });
+    document.addEventListener('scroll', markThrottled, { capture: true, passive: true });
+
     // Another tab's activity (including its recording-in-progress bump
     // below) resets our idle clock too, without waiting for the next poll.
     const onStorage = (e: StorageEvent) => {
@@ -189,6 +208,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }, 15_000);
     return () => {
       events.forEach((e) => document.removeEventListener(e, mark));
+      document.removeEventListener('mousemove', markThrottled);
+      document.removeEventListener('scroll', markThrottled, { capture: true });
       window.removeEventListener('storage', onStorage);
       clearInterval(iv);
     };
