@@ -3,25 +3,16 @@
 ## Pre-launch — required before opening to any external user
 
 ### Auth & PHI
-- [ ] **Rotate any dev OTPs and secrets** — `OPENAI_API_KEY`, `SMTP_PASSWORD`, `POSTGRES_PASSWORD`, session table cleared.
-- [ ] **Turn OFF `DEV_MODE`** — set `DEV_MODE=0` (or delete the line) in `backend/.env`. When set, the OTP is returned in the API response — must not ship to production.
-- [ ] **Configure SMTP** for real OTP delivery. Set env vars in `backend/.env`:
-  ```
-  SMTP_HOST=smtp.gmail.com          # or smtp.sendgrid.net / email-smtp.us-east-1.amazonaws.com
-  SMTP_PORT=587
-  SMTP_USER=notifications@yourdomain.com
-  SMTP_PASSWORD=<app-password-or-api-key>
-  SMTP_FROM="Hei Atlas <notifications@yourdomain.com>"
-  SMTP_TLS=1
-  ```
-  **Gmail (dev-friendly):** turn on 2-step verification, then generate an app password at https://myaccount.google.com/apppasswords — use that as `SMTP_PASSWORD`. Gmail SMTP has a 500/day cap and is not suitable for production.
-  **SendGrid / AWS SES / Postmark / Resend (production):** use the provider's SMTP relay creds, or swap `_deliver_otp()` in `backend/routers/auth.py` to hit the HTTP API. Verify delivery to a real inbox before onboarding users.
-- [ ] **Enable strict NPI validation** — set `NPI_STRICT=1`. Test with a real NPI + name and confirm mismatches are blocked.
-- [ ] **Sign a BAA with OpenAI** (or whichever LLM vendor is upstream of `/notes/generate`) before any real PHI flows through transcription/note generation.
-- [ ] **HTTPS everywhere** — terminate TLS at the load balancer. Set `Secure` on cookies (currently the app uses `Authorization: Bearer <token>` in localStorage; if you switch to cookies, set `SameSite=Strict; Secure; HttpOnly`).
-- [ ] **CORS** — restrict `Access-Control-Allow-Origin` to the frontend origin. Currently allows `*`.
-- [ ] **Audit-log the auth endpoints**. `auth_log` table already exists; wire the audit middleware to also record `/auth/*` requests (username + IP + user-agent + outcome).
+- [x] **Rotate any dev OTPs and secrets** — done 2026-09-01. `OPENAI_API_KEY`, `DATABASE_URL` (Neon/Postgres password), and `RESEND_API_KEY` rotated and each verified live against the real provider (not just "secret updated" — confirmed the new credential actually works: OpenAI `/v1/models`, a real DB query, Resend `/domains`). Session table cleared (150 stale rows). `SMTP_PASSWORD` doesn't apply — see the SMTP item below, superseded by Resend.
+- [x] **`DEV_MODE`** — already off. `DEV_MODE=0` is set in `fly.toml`'s `[env]` (the code also defaults to off if unset); confirmed empirically 2026-09-01 that a live `/auth/login` response contains no `dev_code`.
+- [x] ~~**Configure SMTP** for real OTP delivery~~ — superseded. Production email goes through the Resend HTTP API (`RESEND_API_KEY`, see `_deliver_otp()` in `backend/routers/auth.py`), not SMTP. `SMTP_HOST`/`SMTP_PASSWORD` are an unused fallback path in the same function; nothing to configure here unless you want SMTP as a secondary provider.
+- [x] **Enable strict NPI validation** — already on. `NPI_STRICT=1` is set in `fly.toml`; confirmed empirically 2026-09-01 (a signup attempt with a non-real NPI was rejected with "NPI not found in NPPES or name mismatch").
+- [ ] **Sign a BAA with OpenAI** (or whichever LLM vendor is upstream of `/notes/generate`) before any real PHI flows through transcription/note generation. Still outstanding — see `COMPLIANCE.md`'s BAA checklist (0 of 7 vendors signed as of 2026-08-27).
+- [x] **HTTPS everywhere** — checked 2026-09-01. TLS termination: confirmed both `heiatlas.ai` (Vercel) and `hei-atlas-api.fly.dev` (`force_https = true` in `fly.toml`) redirect plain HTTP to HTTPS. HSTS: frontend already had it (`vercel.json`); the backend didn't send it at all — added an HSTS middleware in `main.py` matching the frontend's config, not yet deployed. Cookie flags: N/A, confirmed no `Set-Cookie` header is ever sent — auth is `Authorization: Bearer <token>` in localStorage as the doc already noted, so `Secure`/`SameSite`/`HttpOnly` don't apply.
+- [x] **CORS** — already restricted. `ALLOWED_ORIGINS` is a deployed Fly secret and `main.py` only falls back to `*` when that secret is absent; confirmed the secret is set.
+- [ ] **Audit-log the auth endpoints**. `phi_access_log` (see `COMPLIANCE.md`) already covers PHI-touching requests and admin access; not confirmed whether `/auth/login`/`/auth/verify`/`/auth/signup` themselves are logged there — worth a direct check before relying on this.
 - [ ] **Session rotation on privilege change** — invalidate old sessions when a user updates their email or NPI.
+- [x] **Signup-approval gate** — done 2026-08-27, closes the gap this doc's own rollout plan called for (see below). New self-signups default to unapproved and can't complete login until an admin approves them from the `/admin` dashboard.
 
 ### Data lifecycle
 - [ ] Confirm encounter TTL policy (24 h) matches your compliance stance; adjust `ENCOUNTER_TTL` in `backend/models/user_auth.py` if needed.
@@ -32,8 +23,8 @@
 
 ### Rate limits & quotas
 - [ ] `DAILY_ENCOUNTER_CAP = 30` returns HTTP 429 — verified.
-- [ ] Add per-user OTP rate limit (currently unbounded — someone could hammer `/auth/login`). Suggested: 5 OTPs per email per 15 minutes.
-- [ ] Add IP-based rate limit on `/auth/signup` to prevent enumeration attacks.
+- [x] Add per-user OTP rate limit — already implemented as suggested. Confirmed in `backend/routers/auth.py`: `MAX_OTP_PER_WINDOW = 5`, `WINDOW_SECONDS = 15 * 60`, applied on both signup and login.
+- [x] Add IP-based rate limit — already implemented, and covers both `/auth/signup` and `/auth/login`, not just signup. Confirmed: `MAX_ATTEMPTS_PER_IP = 20` per 15 minutes.
 - [ ] Cap transcription payload size at 25 MB (browser MediaRecorder 10-min cap + backend enforcement).
 
 ### Observability
@@ -99,15 +90,15 @@ Mitigations now in place:
 
 ## Rollout plan
 
-1. **Alpha (internal)** — 3 physicians on the team. Run for 1 week. Collect note-quality feedback.
-2. **Closed beta** — 25 invited physicians. Feature-gated behind a manual admin approval step after signup (add a `is_approved` column to `auth_user` and reject login until an admin flips it).
+1. **Alpha (internal)** — currently here, solo (single physician), ongoing since July — longer and narrower than the original "3 physicians / 1 week" plan.
+2. **Closed beta** — 25 invited physicians. The approval gate this step called for now exists (`is_approved` column, login rejected until an admin flips it via `/admin`) — done 2026-08-27. BAAs (see `COMPLIANCE.md`) are still the blocker before inviting anyone external.
 3. **Open beta** — public signup enabled, cap raised as backend scales.
 4. **GA** — announce, pricing, subscription model.
 
 ## What already ships in this build
 
-- ✅ NPI-verified signup + email OTP verification (SMS-ready hook in `_deliver_otp`)
-- ✅ Session tokens with 24-hour TTL
+- ✅ NPI-verified signup + email OTP verification (SMS-ready hook in `_deliver_otp`) + signup-approval gate (admin must approve before a new signup can log in)
+- ✅ Session tokens with a 30-minute sliding inactivity TTL (HIPAA §164.312(a)(2)(iii) auto-logoff; bumped from 15 min 2026-07-22 — this line was stale at 24h, corrected 2026-09-01)
 - ✅ Per-user preferences (both explicit and repeat-use learning)
 - ✅ Encounter storage with 24-hour TTL + 30-per-user-per-day cap
 - ✅ User name + credentials chip in the left sidebar with sign-out menu
