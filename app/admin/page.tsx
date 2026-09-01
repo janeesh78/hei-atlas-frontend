@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/session';
 import {
-  getOverview, getUsers, getFeedback, getActivity, getEncounters,
+  getOverview, getUsers, getFeedback, getActivity, getEncounters, approveUser,
   type AdminOverview, type AdminUserRow, type AdminFeedbackRow, type AdminActivity, type AdminEncounters,
 } from '@/lib/admin';
 
@@ -59,6 +59,13 @@ export default function AdminPage() {
     const iv = setInterval(load, REFRESH_MS);
     return () => { alive = false; clearInterval(iv); };
   }, [user]);
+
+  // Updates the row locally on success so the UI reflects it immediately
+  // instead of waiting for the next 30s poll.
+  const handleApprove = async (id: string) => {
+    await approveUser(id);
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, is_approved: true } : u)));
+  };
 
   if (isBooting || authorized === null) return <Shell><p className="text-muted text-sm p-6">Loading…</p></Shell>;
   if (authorized === false) {
@@ -145,7 +152,7 @@ export default function AdminPage() {
           </div>
 
           <main className="px-6 md:px-10 py-6">
-            {tab === 'users' && <UsersTable rows={users} />}
+            {tab === 'users' && <UsersTable rows={users} onApprove={handleApprove} />}
             {tab === 'encounters' && encounters && <EncountersView data={encounters} />}
             {tab === 'formats' && encounters && <FormatsView data={encounters} />}
             {tab === 'activity' && activity && <ActivityView data={activity} />}
@@ -212,12 +219,36 @@ function Card({ label, value }: { label: string; value: string }) {
   );
 }
 
-function UsersTable({ rows }: { rows: AdminUserRow[] }) {
+function UsersTable({ rows, onApprove }: { rows: AdminUserRow[]; onApprove: (id: string) => Promise<void> }) {
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [approveErrors, setApproveErrors] = useState<Record<string, string>>({});
+
+  const approvalsPending = rows.filter((u) => !u.is_approved).length;
+
+  const doApprove = async (id: string) => {
+    setPendingIds((prev) => new Set(prev).add(id));
+    setApproveErrors((prev) => { const next = { ...prev }; delete next[id]; return next; });
+    try {
+      await onApprove(id);
+    } catch (e) {
+      setApproveErrors((prev) => ({ ...prev, [id]: e instanceof Error ? e.message : 'Approve failed' }));
+    } finally {
+      setPendingIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    }
+  };
+
   if (rows.length === 0) return <p className="text-[13px] text-muted">No users yet.</p>;
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-[13px] text-muted">{rows.length} users</p>
+        <p className="text-[13px] text-muted">
+          {rows.length} users
+          {approvalsPending > 0 && (
+            <span className="ml-2 text-[12px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+              {approvalsPending} pending approval
+            </span>
+          )}
+        </p>
         <button
           type="button"
           onClick={() => downloadUsersCsv(rows)}
@@ -230,14 +261,14 @@ function UsersTable({ rows }: { rows: AdminUserRow[] }) {
         <table className="w-full text-[13px]">
           <thead className="bg-canvas text-muted">
             <tr className="text-left">
-              <Th>Name</Th><Th>Cred</Th><Th>NPI</Th><Th>Email</Th><Th>Phone</Th>
+              <Th>Name</Th><Th>Cred</Th><Th>NPI</Th><Th>Email</Th><Th>Phone</Th><Th>Status</Th>
               <Th right>Enc / day</Th><Th right>Minutes / day</Th><Th right>👍 / 👎</Th>
               <Th>Last login</Th><Th>Location</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((u) => (
-              <tr key={u.id} className="border-t border-rule hover:bg-canvas">
+              <tr key={u.id} className={`border-t border-rule hover:bg-canvas ${!u.is_approved ? 'bg-amber-50/40' : ''}`}>
                 <Td>
                   {u.name}
                   {!u.npi_verified && <span className="ml-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5">unverified</span>}
@@ -246,6 +277,23 @@ function UsersTable({ rows }: { rows: AdminUserRow[] }) {
                 <Td className="font-mono text-[12px] text-muted">{u.npi}</Td>
                 <Td>{u.email}</Td>
                 <Td className="text-muted">{u.phone || '—'}</Td>
+                <Td>
+                  {u.is_approved ? (
+                    <span className="text-[11px] text-emerald-700">Approved</span>
+                  ) : (
+                    <div className="flex flex-col items-start gap-1">
+                      <button
+                        type="button"
+                        onClick={() => doApprove(u.id)}
+                        disabled={pendingIds.has(u.id)}
+                        className="text-[11px] font-medium px-2 py-1 rounded-button bg-accent text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                      >
+                        {pendingIds.has(u.id) ? 'Approving…' : 'Approve'}
+                      </button>
+                      {approveErrors[u.id] && <span className="text-[10px] text-red-700">{approveErrors[u.id]}</span>}
+                    </div>
+                  )}
+                </Td>
                 <Td right className="tabular-nums">{u.encounters_today}</Td>
                 <Td right className="tabular-nums">{u.active_minutes_today}</Td>
                 <Td right className="tabular-nums">{u.feedback.up} / {u.feedback.down}</Td>
@@ -267,7 +315,7 @@ function UsersTable({ rows }: { rows: AdminUserRow[] }) {
 
 function downloadUsersCsv(rows: AdminUserRow[]) {
   const header = [
-    'Name','Credentials','NPI','Email','Phone','NPI verified',
+    'Name','Credentials','NPI','Email','Phone','NPI verified','Approved',
     'Signed up','Last login','Encounters today','Minutes today',
     'Thumbs up','Thumbs down','City','Region','Country','Latitude','Longitude',
   ];
@@ -283,6 +331,7 @@ function downloadUsersCsv(rows: AdminUserRow[]) {
     const loc = u.location;
     lines.push([
       u.name, u.credentials, u.npi, u.email, u.phone || '', u.npi_verified ? 'yes' : 'no',
+      u.is_approved ? 'yes' : 'no',
       u.created_at || '', u.last_login || '',
       u.encounters_today, u.active_minutes_today,
       u.feedback.up, u.feedback.down,

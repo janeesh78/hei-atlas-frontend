@@ -11,11 +11,11 @@ function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-async function get<T>(path: string): Promise<T> {
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const t = getToken();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
   if (t) headers.Authorization = `Bearer ${t}`;
-  const res = await apiFetch(path, { headers });
+  const res = await apiFetch(path, { ...init, headers });
   const text = await res.text();
   let data: { detail?: unknown } = {};
   if (text) {
@@ -29,6 +29,9 @@ async function get<T>(path: string): Promise<T> {
   if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${res.status}`);
   return data as T;
 }
+
+const get = <T>(path: string) => request<T>(path);
+const post = <T>(path: string) => request<T>(path, { method: 'POST' });
 
 export interface AdminOverview {
   total_users: number;
@@ -46,6 +49,7 @@ export interface AdminUserRow {
   email: string;
   phone: string | null;
   npi_verified: boolean;
+  is_approved: boolean;
   created_at: string | null;
   last_login: string | null;
   encounters_today: number;
@@ -93,3 +97,5 @@ export const getUsers      = () => get<AdminUserRow[]>('/admin/users');
 export const getFeedback   = (limit = 100) => get<AdminFeedbackRow[]>(`/admin/feedback?limit=${limit}`);
 export const getActivity   = (days = 14) => get<AdminActivity>(`/admin/activity?days=${days}`);
 export const getEncounters = (days = 14) => get<AdminEncounters>(`/admin/encounters?days=${days}`);
+export const approveUser   = (id: string) =>
+  post<{ ok: boolean; id: string; is_approved: boolean; already_approved: boolean }>(`/admin/users/${id}/approve`);
