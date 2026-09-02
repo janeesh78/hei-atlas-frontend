@@ -56,15 +56,23 @@ export default function PrivacyPage() {
         </p>
         <ul className="list-disc pl-5 mt-2 space-y-2">
           <li>
-            <span className="font-medium">Business Associate Agreement (BAA):</span> Because our
-            Services process Protected Health Information (PHI) governed by the Health Insurance
-            Portability and Accountability Act (HIPAA), our relationship with healthcare providers
-            is governed by a signed HIPAA Business Associate Agreement (BAA).
+            <span className="font-medium">Business Associate Agreement (BAA) Status:</span> Our
+            Services are designed for use with Protected Health Information (PHI) governed by the
+            Health Insurance Portability and Accountability Act (HIPAA). As of the date of this
+            policy, we have not yet executed a Business Associate Agreement with individual Users
+            or with our infrastructure and AI sub-processors. Until a BAA is executed and in
+            effect for your account, do not enter real, individually identifiable patient
+            information anywhere in the Platform (full name, date of birth, medical record
+            number, or similar) — use a de-identified handle such as initials or a private code
+            for the patient-identifier field, which the Platform is designed to accept in place
+            of a formal identifier. We will update this Privacy Policy and notify Users before
+            processing identifiable PHI under an executed BAA.
           </li>
           <li>
-            <span className="font-medium">Precedence:</span> In the event of any conflict between
-            this Privacy Policy, our Terms of Use, and the BAA, the terms of the BAA shall control
-            with respect to any Protected Health Information (PHI).
+            <span className="font-medium">Precedence:</span> If and when a Business Associate
+            Agreement is executed between us and a User or covered entity, its terms will control
+            over this Privacy Policy and our Terms of Use with respect to any Protected Health
+            Information (PHI) covered by that agreement.
           </li>
         </ul>
 
