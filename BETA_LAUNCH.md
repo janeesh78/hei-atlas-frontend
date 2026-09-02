@@ -49,7 +49,7 @@
 - [x] Data deletion request flow — `DELETE /me/account` already existed backend-side (confirmed working, irreversible, audit-logged) but had no frontend UI. Rather than build a UI, the privacy policy now documents the actual working flow: email us, we process the deletion via the existing endpoint. That's a real, functioning request flow even without a self-service button — a UI would be a nice-to-have on top, not a gap in the flow itself.
 
 ### Testing
-- [ ] End-to-end smoke test (already covered in `scripts/start-local.sh status` and the `/loop test modes` heartbeat)
+- [ ] End-to-end smoke test — stale, checked 2026-09-02: neither `scripts/start-local.sh` nor any `/loop test modes` heartbeat exists anywhere in either repo. The real current practice is a manual smoke test run on request this session (backend health → public pages → mint a token via Fly SSH → inject into localStorage → verify authenticated pages → sign out), not an automated/scripted one. Works, but isn't the automated check this line implies — genuinely still open if you want it scripted.
 - [ ] Load test at 100 concurrent users with realistic payloads (transcription + note generation). Backend should scale horizontally.
 - [ ] Chaos test the offline queue: kill network mid-encounter, verify audio persists and uploads on reconnect.
 - [ ] Cross-browser: Safari (iOS), Chrome (Android), Chrome/Edge/Firefox desktop.
