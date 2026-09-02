@@ -153,8 +153,13 @@ export default function Home() {
   const [loadingStage, setLoadingStage] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Patient identifier for the encounter in progress — MRN, initials, or a
+  // Patient identifier for the encounter in progress — initials or a
   // codename, matching what patient_ref already documents backend-side.
+  // Deliberately NOT "MRN": COMPLIANCE.md's PHI-touched inventory states
+  // the app "never asks for" formal identifiers (MRN/DOB/name) and
+  // directs physicians to a private handle instead — an earlier version
+  // of this field's copy suggested MRN as an option, contradicting that
+  // (MRN is one of HIPAA's 18 Safe Harbor identifiers). Fixed 2026-09-01.
   // Deliberately NOT cleared by resetResults(): that fires on every
   // record→transcribe→generate cycle for the CURRENT patient, and clearing
   // it there would wipe what was just typed the moment a recording stops.
@@ -2031,16 +2036,17 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Patient identifier — MRN, initials, or a codename; never a
+          {/* Patient identifier — initials or a codename; never a
               requirement to proceed. Drives the Recent Visits label instead
               of the synthetic "Patient A/B/C" letter, and is saved with the
-              encounter. Not sent to note generation. */}
+              encounter. Not sent to note generation. Deliberately not "MRN"
+              — see the field's state comment above for why. */}
           <input
             ref={patientIdentifierInputRef}
             type="text"
             value={patientIdentifier}
             onChange={(e) => setPatientIdentifier(e.target.value)}
-            placeholder="Patient identifier — MRN, initials, or codename (optional)"
+            placeholder="Patient identifier — initials or codename (optional)"
             className="w-full h-10 px-3.5 text-[14px] bg-surface border border-rule rounded-button text-ink placeholder:text-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 transition-all duration-200"
           />
 
