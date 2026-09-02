@@ -107,31 +107,31 @@ function LoginPageInner() {
             {mode === 'signup' && (
               <>
                 <div>
-                  <label className="ds-label">Full name</label>
-                  <input value={name} onChange={(e) => setName(e.target.value)} className="ds-input mt-1" placeholder="e.g., Alex Chen" required autoFocus />
+                  <label className="ds-label" htmlFor="login-name">Full name</label>
+                  <input id="login-name" value={name} onChange={(e) => setName(e.target.value)} className="ds-input mt-1" placeholder="e.g., Alex Chen" required autoFocus />
                 </div>
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label className="ds-label">Credentials</label>
-                    <select value={credentials} onChange={(e) => setCredentials(e.target.value)} className="ds-input mt-1">
+                    <label className="ds-label" htmlFor="login-credentials">Credentials</label>
+                    <select id="login-credentials" value={credentials} onChange={(e) => setCredentials(e.target.value)} className="ds-input mt-1">
                       {['MD','DO','PA-C','NP','MBBS','MD, PhD','DNP','RN','PharmD'].map(c => <option key={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="flex-1">
-                    <label className="ds-label">NPI (10 digits)</label>
-                    <input value={npi} onChange={(e) => setNpi(e.target.value.replace(/\D/g,'').slice(0,10))} className="ds-input mt-1 font-mono" placeholder="1234567890" required inputMode="numeric" />
+                    <label className="ds-label" htmlFor="login-npi">NPI (10 digits)</label>
+                    <input id="login-npi" value={npi} onChange={(e) => setNpi(e.target.value.replace(/\D/g,'').slice(0,10))} className="ds-input mt-1 font-mono" placeholder="1234567890" required inputMode="numeric" />
                   </div>
                 </div>
               </>
             )}
             <div>
-              <label className="ds-label">Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ds-input mt-1" placeholder="you@clinic.org" required autoFocus={mode==='login'} />
+              <label className="ds-label" htmlFor="login-email">Email</label>
+              <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ds-input mt-1" placeholder="you@clinic.org" required autoFocus={mode==='login'} />
             </div>
             {mode === 'signup' && (
               <div>
-                <label className="ds-label">Phone (optional)</label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="ds-input mt-1" placeholder="+1 555 123 4567" />
+                <label className="ds-label" htmlFor="login-phone">Phone (optional)</label>
+                <input id="login-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="ds-input mt-1" placeholder="+1 555 123 4567" />
               </div>
             )}
             {error && <p className="text-[13px] text-red-700 bg-red-50 border border-red-200 rounded-button px-3 py-2">{error}</p>}
@@ -155,8 +155,9 @@ function LoginPageInner() {
               A 6-digit code was sent to <span className="font-medium text-ink">{email}</span>. Enter it below to continue.
             </p>
             <div>
-              <label className="ds-label">Verification code</label>
+              <label className="ds-label" htmlFor="login-otp">Verification code</label>
               <input
+                id="login-otp"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g,'').slice(0,6))}
                 className="ds-input mt-1 font-mono text-center tracking-[0.4em] text-[18px]"
