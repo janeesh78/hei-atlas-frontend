@@ -34,13 +34,13 @@
 - [ ] Alert on: 5xx spike, transcription failure rate >5%, encounter save failure rate >0%, daily-cap 429s.
 
 ### Infrastructure
-- [ ] Deploy Postgres + Redis to managed services (RDS + ElastiCache, Cloud SQL + Memorystore, etc.). Local Docker containers are dev-only.
-- [ ] Frontend built with `next build`, served from Vercel / Netlify / Cloudflare Pages / your own Node runtime.
-- [ ] Backend containerized (Dockerfile already exists at `backend/Dockerfile`). Deploy behind an ALB / Cloud Run with 2+ replicas and health-check on `/health`.
-- [ ] Static assets (`sw.js`, `manifest.json`, icons) served with correct `Cache-Control` and immutable hashes for JS bundles.
-- [ ] CDN in front of the frontend.
-- [ ] Domain + TLS certificate configured.
-- [ ] Add real PWA icons at `public/apple-touch-icon.png`, `public/icon-192.png`, `public/icon-512.png` (currently 404s — non-fatal but visible).
+- [x] Deploy Postgres + Redis to managed services — this line predates the actual choices (written generically for AWS RDS/ElastiCache). Confirmed 2026-09-02: Neon (Postgres) and Upstash (Redis), both managed, both live (`DATABASE_URL`/`REDIS_URL` deployed Fly secrets).
+- [x] Frontend built with `next build`, served from Vercel — confirmed, this is exactly the setup (one of the options this line already named).
+- [ ] Backend containerized, 2+ replicas, health-check on `/health` — **partially true, one real gap remains.** Containerization ✓ (Dockerfile, built fresh every `flyctl deploy`), health-check ✓ (`fly.toml` checks + every deploy confirms it), but replicas: checked `flyctl status` 2026-09-02 — exactly **1 machine** running, not 2+. Zero redundancy right now — if that one machine goes down, the backend is fully offline. This is the actual remaining work in this item, not a wording problem.
+- [x] Static assets served with correct `Cache-Control` and immutable JS bundle hashes — verified live 2026-09-02: `sw.js` → `public, max-age=0, must-revalidate`, `manifest.json` → `public, max-age=3600`, a JS chunk → `public,max-age=31536000,immutable`. All correct.
+- [x] CDN in front of the frontend — Vercel's edge network serves every deployment through their CDN by default; no separate setup needed. Already confirmed via `x-vercel-cache`/`server: Vercel` response headers seen repeatedly this session.
+- [x] Domain + TLS certificate configured — `heiatlas.ai`, HTTPS enforced, HSTS on both frontend and backend. Confirmed repeatedly this session (most recently in the HTTPS/HSTS item above).
+- [ ] Add real PWA icons at `public/apple-touch-icon.png`, `public/icon-192.png`, `public/icon-512.png` — still true, not stale. Checked live 2026-09-02: all three still 404.
 
 ### Legal / policy pages
 - [ ] Terms of service link in login screen footer.
