@@ -43,10 +43,10 @@
 - [x] Add real PWA icons — done 2026-09-02. Generated to match the existing "HA" brand chip (navy `#0B2447` background, bold white Inter "HA", same mark already used in `LeftSidebar.tsx`) at the exact sizes/format `manifest.json` declares: 180×180 (apple-touch-icon, opaque, full-bleed — Apple applies its own corner rounding), 192×192 and 512×512 (both `"purpose": "any maskable"` — kept the glyph conservatively inside the standard safe-zone circle so an aggressive OS mask shape can't clip it). Verified locally: all three + `manifest.json` return 200, not 404.
 
 ### Legal / policy pages
-- [ ] Terms of service link in login screen footer.
-- [ ] Privacy policy explaining encounter retention (24 h), transcription providers used, and NPI verification via NPPES.
-- [ ] BAA / SOC 2 posture documented for prospective customers.
-- [ ] Data deletion request flow — the /encounters DELETE endpoint handles single-item deletes; add a full account deletion route.
+- [x] Terms of service link in login screen footer — already present (`app/login/page.tsx` links both `/terms` and `/privacy`).
+- [x] Privacy policy explaining encounter retention, transcription providers, and NPI/NPPES verification — the pages existed but were materially wrong (a live, false "governed by a signed BAA" claim among others); full rewrite done and deployed 2026-09-02, see the BAA-claim and full-rewrite work above. Now correctly states the actual 24h retention, names OpenAI/Anthropic as the AI providers, and covers NPPES-based NPI verification.
+- [ ] BAA / SOC 2 posture documented for prospective customers — not yet done. `COMPLIANCE.md` covers this thoroughly but is an internal engineering doc in the repo, not something a prospective customer would ever see. Checking this next.
+- [x] Data deletion request flow — `DELETE /me/account` already existed backend-side (confirmed working, irreversible, audit-logged) but had no frontend UI. Rather than build a UI, the privacy policy now documents the actual working flow: email us, we process the deletion via the existing endpoint. That's a real, functioning request flow even without a self-service button — a UI would be a nice-to-have on top, not a gap in the flow itself.
 
 ### Testing
 - [ ] End-to-end smoke test (already covered in `scripts/start-local.sh status` and the `/loop test modes` heartbeat)
