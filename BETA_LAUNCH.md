@@ -90,7 +90,7 @@ Mitigations now in place:
 
 ## Nice-to-have before opening beta
 
-- [ ] SMS OTP delivery (Twilio / SNS) alongside email.
+- [ ] SMS OTP delivery (Twilio / SNS) alongside email. Built 2026-09-02 (vendor: Twilio, picked over SNS — plain HTTP API via `httpx`, zero new dependencies, matches the existing Resend pattern; SNS would've needed a fresh `boto3` dependency + AWS account). `_deliver_otp` (`backend/routers/auth.py`) now also sends via Twilio's Messages API whenever the physician has a phone on file, with best-effort E.164 normalization (handles a bare 10-digit US number, an 11-digit number with a leading 1, or an already-`+`-prefixed international number; unparseable numbers just skip SMS and log a warning, never block the email send). Verified locally against the real function with mocked `httpx.post`: no network call when `TWILIO_*` is unset (today's prod state — unaffected), exactly one correctly-formed request when configured, zero calls for a garbage number. Frontend/backend "check your email" copy updated to mention phone too. **Not yet live**: no Twilio account exists yet. Before this does anything in production: create a Twilio account + number, set `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` as Fly secrets, decide on a BAA (added to `baa-intake.csv` for consistency with Resend, which plays the identical OTP-code-only role for email — worth a real look at whether SMS-delivery-of-a-6-digit-code-to-the-physician's-own-phone is in scope for a BAA at all, since it never carries patient data), then deploy.
 - [ ] Passkeys / WebAuthn as an alternative to OTP.
 - [ ] Admin dashboard to see active users, encounter volume, error rate.
 - [ ] Physician onboarding email with tips for good ATLAS captures.

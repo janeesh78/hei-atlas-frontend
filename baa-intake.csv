@@ -6,3 +6,4 @@ Upstash,Redis (fine-piranha-148206),Form,https://upstash.com/enterprise,Enterpri
 Fly.io,Machines (app: hei-atlas-api / iad),Email,billing@fly.io,Paid plan + signed order form,,,,,,,,,requested,"Process documented at fly.io/docs/about/healthcare"
 Vercel,Frontend hosting (project: hei-atlas),Form,https://vercel.com/contact/sales,Enterprise only,,,,,,,,,requested,"Enterprise plan required — expect pricing conversation first"
 Resend,Transactional email (domain: heiatlas.ai),Email,team@resend.com,Business or Enterprise,,,,,,,,,requested,"Domain already verified in Resend dashboard"
+Twilio,SMS OTP delivery (Messages API),Portal,https://www.twilio.com/en-us/legal/hipaa,Eligible product + paid account (verify Messaging is in-scope),,,,,,,,,not-started,"Added 2026-09-02 alongside SMS OTP delivery; same OTP-code-only role as Resend for email, never carries patient data"

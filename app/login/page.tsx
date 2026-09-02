@@ -51,7 +51,7 @@ function LoginPageInner() {
         setCode(res.dev_code);
         setNotice(`Dev mode: code ${res.dev_code} auto-filled below.`);
       } else {
-        setNotice(mode === 'signup' ? 'Check your email for the 6-digit code.' : 'If an account exists, a code has been sent.');
+        setNotice(mode === 'signup' ? 'Check your email (and phone, if you added one) for the 6-digit code.' : 'If an account exists, a code has been sent.');
       }
       setStep('otp');
     } catch (e2: unknown) {
