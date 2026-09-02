@@ -17,7 +17,7 @@
 ### Data lifecycle
 - [ ] Confirm encounter TTL policy (24 h) matches your compliance stance; adjust `ENCOUNTER_TTL` in `backend/models/user_auth.py` if needed.
 - [x] Schedule a background prune job for `Encounter.expires_at < now()` — done 2026-09-01. `prune_all_expired()` (`routers/encounters.py`) sweeps every user's expired rows, not just the requesting user; runs every 15 min via an `asyncio.create_task` loop started in `main.py`'s lifespan, same pattern already used for the trial-cache refresh. The existing per-user lazy prune stays in place alongside it — that one gives an active user immediate consistency, which a 15-min sweep alone would regress. Verified directly: created an already-expired test encounter, confirmed `prune_all_expired()` found and removed it.
-- [ ] Backup Postgres and Redis before every deploy. Confirm restore procedure end-to-end at least once.
+- [ ] Backup Postgres and Redis before every deploy. Confirm restore procedure end-to-end at least twice. Scoped 2026-09-01, see `BACKUP_RESTORE.md`: Redis excluded (no durable data — confirmed it's only rate-limit counters + a rebuildable cache), Postgres restore verified via Neon's own point-in-time recovery rather than a custom backup script. Restoring is a Neon-account action (creating a restore branch) that only the Neon dashboard can do — waiting on you to run Steps 0–1 there twice; I'll independently verify each restored branch's data (Step 2) the moment you hand me a connection string.
 - [ ] Encrypt Postgres at rest (managed service: AWS RDS with KMS, Cloud SQL with CMEK, etc.).
 - [ ] Confirm the `patient_ref` column is understood by physicians as a **client-side handle** (initials or MRN alias), not full PHI.
 
