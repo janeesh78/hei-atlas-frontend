@@ -92,10 +92,32 @@ export interface AdminEncounters {
   total: number;
 }
 
+export interface RetentionCheckpoint {
+  eligible: number;
+  returned: number;
+  rate: number | null; // null = no cohort has reached this checkpoint yet
+}
+
+export interface AdminRetention {
+  cohorts: {
+    cohort_date: string;
+    cohort_size: number;
+    day2: RetentionCheckpoint;
+    week2: RetentionCheckpoint;
+    month2: RetentionCheckpoint;
+  }[];
+  summary: {
+    day2: RetentionCheckpoint;
+    week2: RetentionCheckpoint;
+    month2: RetentionCheckpoint;
+  };
+}
+
 export const getOverview   = () => get<AdminOverview>('/admin/overview');
 export const getUsers      = () => get<AdminUserRow[]>('/admin/users');
 export const getFeedback   = (limit = 100) => get<AdminFeedbackRow[]>(`/admin/feedback?limit=${limit}`);
 export const getActivity   = (days = 14) => get<AdminActivity>(`/admin/activity?days=${days}`);
 export const getEncounters = (days = 14) => get<AdminEncounters>(`/admin/encounters?days=${days}`);
+export const getRetention  = () => get<AdminRetention>('/admin/retention');
 export const approveUser   = (id: string) =>
   post<{ ok: boolean; id: string; is_approved: boolean; already_approved: boolean }>(`/admin/users/${id}/approve`);

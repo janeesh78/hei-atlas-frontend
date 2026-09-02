@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/session';
 import {
-  getOverview, getUsers, getFeedback, getActivity, getEncounters, approveUser,
-  type AdminOverview, type AdminUserRow, type AdminFeedbackRow, type AdminActivity, type AdminEncounters,
+  getOverview, getUsers, getFeedback, getActivity, getEncounters, getRetention, approveUser,
+  type AdminOverview, type AdminUserRow, type AdminFeedbackRow, type AdminActivity, type AdminEncounters, type AdminRetention,
 } from '@/lib/admin';
 
-type Tab = 'users' | 'feedback' | 'activity' | 'encounters' | 'formats' | 'map';
+type Tab = 'users' | 'feedback' | 'activity' | 'encounters' | 'formats' | 'retention' | 'map';
 type Module = 'ambient' | 'integrator' | 'consensus';
 const REFRESH_MS = 30_000;
 
@@ -29,6 +29,7 @@ export default function AdminPage() {
   const [feedback, setFeedback] = useState<AdminFeedbackRow[]>([]);
   const [activity, setActivity] = useState<AdminActivity | null>(null);
   const [encounters, setEncounters] = useState<AdminEncounters | null>(null);
+  const [retention, setRetention] = useState<AdminRetention | null>(null);
   const [tab, setTab] = useState<Tab>('users');
   const [activeModule, setActiveModule] = useState<Module>('ambient');
   const [err, setErr] = useState<string | null>(null);
@@ -44,9 +45,9 @@ export default function AdminPage() {
     let alive = true;
     const load = async () => {
       try {
-        const [ov, us, fb, ac, en] = await Promise.all([getOverview(), getUsers(), getFeedback(200), getActivity(14), getEncounters(14)]);
+        const [ov, us, fb, ac, en, rt] = await Promise.all([getOverview(), getUsers(), getFeedback(200), getActivity(14), getEncounters(14), getRetention()]);
         if (!alive) return;
-        setOverview(ov); setUsers(us); setFeedback(fb); setActivity(ac); setEncounters(en);
+        setOverview(ov); setUsers(us); setFeedback(fb); setActivity(ac); setEncounters(en); setRetention(rt);
         setAuthorized(true); setErr(null);
       } catch (e: unknown) {
         if (!alive) return;
@@ -137,7 +138,7 @@ export default function AdminPage() {
           {/* Tabs */}
           <div className="px-6 md:px-10">
             <div className="inline-flex p-1 bg-canvas rounded-button">
-              {(['users', 'encounters', 'formats', 'activity', 'feedback', 'map'] as Tab[]).map((t) => (
+              {(['users', 'encounters', 'formats', 'activity', 'retention', 'feedback', 'map'] as Tab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -156,6 +157,7 @@ export default function AdminPage() {
             {tab === 'encounters' && encounters && <EncountersView data={encounters} />}
             {tab === 'formats' && encounters && <FormatsView data={encounters} />}
             {tab === 'activity' && activity && <ActivityView data={activity} />}
+            {tab === 'retention' && retention && <RetentionView data={retention} />}
             {tab === 'feedback' && <FeedbackList rows={feedback} />}
             {tab === 'map' && <LocationMap rows={users} />}
           </main>
@@ -440,6 +442,59 @@ function ActivityView({ data }: { data: AdminActivity }) {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function RetentionView({ data }: { data: AdminRetention }) {
+  const checkpointLabel = (cp: { eligible: number; returned: number; rate: number | null }) =>
+    cp.rate !== null ? `${cp.rate}%` : '—';
+  const checkpointTitle = (cp: { eligible: number; returned: number; rate: number | null }) =>
+    cp.eligible > 0 ? `${cp.returned}/${cp.eligible} returned` : 'No cohort has reached this checkpoint yet';
+  const checkpointCardValue = (cp: { eligible: number; returned: number; rate: number | null }) =>
+    cp.rate !== null ? `${cp.rate}% (${cp.returned}/${cp.eligible})` : 'No cohort yet';
+
+  return (
+    <div className="space-y-6">
+      <p className="text-[12px] text-muted -mt-1">
+        &ldquo;Returned&rdquo; means active (not just logged in) in the checkpoint window. Day-2 = the day after signup.
+        Week-2 = days 8&ndash;14 after signup. Month-2 = days 31&ndash;60 after signup. A cohort only counts once that
+        whole window has actually elapsed for it &mdash; recent signups are excluded rather than counted as non-returning.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Card label="Day-2 return" value={checkpointCardValue(data.summary.day2)} />
+        <Card label="Week-2 return" value={checkpointCardValue(data.summary.week2)} />
+        <Card label="Month-2 return" value={checkpointCardValue(data.summary.month2)} />
+      </div>
+
+      <div className="ds-card overflow-x-auto">
+        <div className="px-3 py-2 border-b border-rule text-[13px] font-semibold text-ink">
+          Cohorts by signup date
+        </div>
+        {data.cohorts.length === 0 ? (
+          <p className="text-[13px] text-muted p-4">No signups yet.</p>
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead className="bg-canvas text-muted">
+              <tr className="text-left">
+                <Th>Signed up</Th><Th right>Cohort size</Th><Th right>Day-2</Th><Th right>Week-2</Th><Th right>Month-2</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.cohorts.map((c) => (
+                <tr key={c.cohort_date} className="border-t border-rule">
+                  <Td>{c.cohort_date}</Td>
+                  <Td right className="tabular-nums">{c.cohort_size}</Td>
+                  <Td right className="tabular-nums"><span title={checkpointTitle(c.day2)}>{checkpointLabel(c.day2)}</span></Td>
+                  <Td right className="tabular-nums"><span title={checkpointTitle(c.week2)}>{checkpointLabel(c.week2)}</span></Td>
+                  <Td right className="tabular-nums"><span title={checkpointTitle(c.month2)}>{checkpointLabel(c.month2)}</span></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
