@@ -25,7 +25,7 @@
 - [ ] `DAILY_ENCOUNTER_CAP = 30` returns HTTP 429 — verified.
 - [x] Add per-user OTP rate limit — already implemented as suggested. Confirmed in `backend/routers/auth.py`: `MAX_OTP_PER_WINDOW = 5`, `WINDOW_SECONDS = 15 * 60`, applied on both signup and login.
 - [x] Add IP-based rate limit — already implemented, and covers both `/auth/signup` and `/auth/login`, not just signup. Confirmed: `MAX_ATTEMPTS_PER_IP = 20` per 15 minutes.
-- [ ] Cap transcription payload size at 25 MB (browser MediaRecorder 10-min cap + backend enforcement).
+- [x] Transcription payload size — already handled, checked 2026-09-01. This line described a stale architecture: the "10-min MediaRecorder cap" it references was deliberately removed 2026-07-09 because it was cutting off real consults, and recording length is unbounded client-side now. 25 MB (24 MB with headroom, `_OPENAI_MAX_BYTES` in `services/whisper_service.py`) isn't a cap the app enforces — it's OpenAI's Whisper API's own hard per-request limit. The backend already works around it: audio over that size is ffmpeg-split into chunks and transcribed concurrently (`_transcribe_openai_chunked`), verified in production up to 35 min / 26 MB, 4 segments, 75s total. Nothing to build — the checklist item just hadn't caught up to the July fix.
 
 ### Observability
 - [ ] Point `/tmp/onc-backend.log` and `/tmp/oncology-dev.log` at a real log aggregator (Datadog / CloudWatch / Loki / etc.). Redact OTP codes at ingest.
