@@ -9,7 +9,7 @@ const TOC = [
   ['6-ai-training-safeguards', '6. AI Model Training & Data Safeguards'],
   ['7-security-encryption', '7. Enterprise Security & Encryption'],
   ['8-your-rights', '8. Your Rights and Choices'],
-  ['9-b2b-exemptions', '9. B2B Exemptions & State Privacy Laws'],
+  ['9-b2b-exemptions', '9. State Privacy Laws'],
   ['10-changes-contact', '10. Changes to This Policy & Contact Info'],
 ] as const;
 
@@ -91,8 +91,9 @@ export default function PrivacyPage() {
             healthcare institution.
           </li>
           <li>
-            <span className="font-medium">Account Credentials:</span> Username, email address,
-            corporate phone number, and password (which are strictly encrypted and salted).
+            <span className="font-medium">Account Credentials:</span> Email address and an
+            optional phone number. The Platform is passwordless — sign-in uses a one-time code
+            sent to your email, verified against your NPI, rather than a stored password.
           </li>
         </ul>
         <p className="font-medium mt-4">B. Ambient Audio &amp; Clinical Consultation Data (Collected in Real-Time)</p>
@@ -126,7 +127,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <span className="font-medium">Access Metrics:</span> Timestamps of logins, recording
-            starts/stops, clinical note exports, and EHR integration attempts.
+            starts/stops, and note-generation activity.
           </li>
         </ul>
 
@@ -139,23 +140,17 @@ export default function PrivacyPage() {
         </p>
         <ul className="list-disc pl-5 mt-2 space-y-2">
           <li>
-            <span className="font-medium">Immediate Audio Deletion:</span> Once raw audio of a
-            clinical encounter is processed, converted into a text transcript, and utilized to
-            generate the draft clinical note, the raw audio file is immediately and permanently
-            deleted from our active cloud environments.
+            <span className="font-medium">Raw Audio:</span> Audio is streamed to our transcription
+            provider for processing and is not written to durable storage on our servers at any
+            point — it exists only transiently in memory/temporary files for the duration of that
+            processing request.
           </li>
           <li>
-            <span className="font-medium">Transcript Purging:</span> Text transcripts utilized to
-            compile the clinical notes are automatically deleted or securely archived in
-            accordance with the retention periods specified in your hospital&rsquo;s Enterprise
-            Agreement or BAA.
-          </li>
-          <li>
-            <span className="font-medium">Draft Note Lifecycle:</span> Draft clinical notes remain
-            in our secure, encrypted cloud space only until they are reviewed, finalized, and
-            successfully exported to your Electronic Health Record (EHR) system, or up to a
-            maximum duration dictated by your institution&rsquo;s configuration, after which they
-            are purged.
+            <span className="font-medium">Transcripts, Notes, and Related Data:</span> Once saved,
+            the transcript, generated note, coding, and toxicity data for an encounter are retained
+            for a fixed 24-hour window and then automatically and permanently deleted — this
+            applies uniformly to every encounter and every User; it is not configurable per
+            institution or hospital agreement.
           </li>
         </ul>
 
@@ -178,10 +173,6 @@ export default function PrivacyPage() {
             clinical access.
           </li>
           <li>
-            <span className="font-medium">EHR Integration:</span> Securely transmitting finished
-            medical records directly into your hospital&rsquo;s Electronic Health Record system.
-          </li>
-          <li>
             <span className="font-medium">HIPAA Compliance Auditing:</span> Maintaining immutable
             audit logs of which authorized accounts accessed, modified, or exported clinical data.
           </li>
@@ -196,15 +187,11 @@ export default function PrivacyPage() {
         </p>
         <ul className="list-disc pl-5 mt-2 space-y-2">
           <li>
-            <span className="font-medium">With Your EHR and Clinical Systems:</span> Exporting
-            completed clinical notes directly to your designated medical records software at your
-            direction.
-          </li>
-          <li>
-            <span className="font-medium">With HIPAA-Compliant Service Providers:</span> Disclosing
-            data to technical infrastructure vendors (such as secure, US-based cloud hosting
-            environments) who have signed strict Business Associate Agreements and are legally
-            bound to protect the data.
+            <span className="font-medium">With Infrastructure and AI Vendors:</span> We use
+            third-party providers for hosting, database storage, and AI-based transcription and
+            note generation. As noted in Section 1, Business Associate Agreements with these
+            vendors are not yet executed — see that section for what this means for real patient
+            information today.
           </li>
           <li>
             <span className="font-medium">For Legal &amp; Safety Mandates:</span> Where required by
@@ -218,22 +205,17 @@ export default function PrivacyPage() {
         </h2>
         <ul className="list-disc pl-5 mt-2 space-y-2">
           <li>
-            <span className="font-medium">Zero Training on Live Patient PHI:</span> Oncology
-            Solutions LLC does not use active Patient PHI, raw conversational audio, or live
-            encounter transcripts to train public, third-party generative artificial intelligence
-            models.
+            <span className="font-medium">AI Providers Used:</span> Transcription and note
+            generation are performed by sending encrypted requests over HTTPS to third-party AI
+            providers (currently OpenAI for transcription and Anthropic for note generation). These
+            are the same providers&rsquo; standard API products, not a dedicated private deployment
+            we operate — see Section 1 for BAA status with these providers.
           </li>
           <li>
-            <span className="font-medium">Secure Enterprise Environments:</span> Any AI model
-            processing or natural language synthesis takes place inside virtual private clouds
-            protected by enterprise-grade firewalls. Your clinical inputs are never exposed to
-            public internet-facing machine learning tools.
-          </li>
-          <li>
-            <span className="font-medium">De-Identified Product Improvement:</span> We may utilize
-            fully de-identified and aggregated operational metadata (completely stripped of all 18
-            HIPAA patient identifiers) solely to optimize our internal clinical terminology engines
-            and language performance.
+            <span className="font-medium">Model Training:</span> Under these providers&rsquo;
+            standard API terms, data submitted through their APIs is not used to train their
+            general-purpose models by default. We do not separately use your clinical inputs to
+            train any model of our own.
           </li>
         </ul>
 
@@ -247,16 +229,20 @@ export default function PrivacyPage() {
         <ul className="list-disc pl-5 mt-2 space-y-2">
           <li>
             <span className="font-medium">Data in Transit:</span> All audio transmissions, API
-            payloads, and metadata are encrypted using transport-layer security (minimum TLS 1.3).
+            payloads, and metadata are encrypted in transit via HTTPS/TLS, including
+            HTTP-Strict-Transport-Security (HSTS) so browsers never fall back to an unencrypted
+            connection.
           </li>
           <li>
-            <span className="font-medium">Data at Rest:</span> All transient storage, databases,
-            and backup files are encrypted using Advanced Encryption Standard (AES-256).
+            <span className="font-medium">Data at Rest:</span> Our database provider encrypts all
+            stored data at rest using AES-256.
           </li>
           <li>
-            <span className="font-medium">Access Control:</span> Role-Based Access Controls (RBAC),
-            multi-factor authentication (MFA), and automated session timeouts are strictly enforced
-            for all clinical accounts.
+            <span className="font-medium">Access Control:</span> Sign-in requires a one-time code
+            sent to your verified email (no password to be phished or reused), and sessions
+            automatically time out after a period of inactivity. We do not currently offer a
+            second authentication factor beyond the one-time code, or role-based permission tiers
+            beyond a single administrative role used for internal oversight.
           </li>
         </ul>
 
@@ -270,39 +256,30 @@ export default function PrivacyPage() {
             a live ambient recording at any point during a clinical encounter.
           </li>
           <li>
-            <span className="font-medium">Access &amp; Edits:</span> You have the absolute right
-            and duty to review, edit, modify, or completely delete any draft note generated by the
-            Platform before it is pushed to an EHR.
+            <span className="font-medium">Access &amp; Edits:</span> You have the right and duty to
+            review, edit, and correct any draft note the Platform generates before relying on it.
           </li>
           <li>
-            <span className="font-medium">Account Deactivation:</span> You may deactivate your
-            account at any time. Upon account termination, your data will be securely purged or
-            anonymized in accordance with our system retention tables and the governing BAA.
+            <span className="font-medium">Data Access and Deletion:</span> You can request a full
+            export of everything we hold about your account, or request permanent deletion of your
+            account and all associated data, by contacting us at the email below. Deletion is
+            irreversible and, once processed, removes your encounters, notes, preferences, and
+            account record — see Section 1 for how PHI handling changes once a BAA is in effect.
           </li>
         </ul>
 
         <h2 id="9-b2b-exemptions" className="text-[16px] font-semibold mt-8 mb-2">
-          9. B2B Exemptions &amp; State Privacy Laws
+          9. State Privacy Laws
         </h2>
         <p>
-          Oncology Solutions LLC is a specialized, business-to-business (B2B) clinical platform
-          operating exclusively for healthcare institutions and verified medical practitioners.
-        </p>
-        <ul className="list-disc pl-5 mt-2 space-y-2">
-          <li>
-            <span className="font-medium">State Consumer Law Exemptions:</span> Because our
-            software processes data strictly within a professional B2B healthcare context and
-            deals directly with Protected Health Information (PHI) governed by HIPAA, it is
-            largely exempt from individual state-level consumer privacy acts (such as the
-            California Consumer Privacy Act (CCPA), the Colorado Privacy Act (CPA), and similar
-            state statutes).
-          </li>
-          <li>
-            <span className="font-medium">Unified Federal Compliance:</span> We maintain a single,
-            highly-stringent compliance standard rooted in HIPAA guidelines and federal privacy
-            standards, rather than state-by-state consumer-focused opt-out frameworks.
-          </li>
-        </ul>
+          Hei Atlas is currently used directly by individual licensed practitioners who sign up
+          themselves, rather than exclusively through institutional or hospital contracts. Whether
+          a particular state consumer privacy law (such as the California Consumer Privacy Act or
+          the Colorado Privacy Act) applies to your use of the Platform, and to what extent, depends
+          on your specific circumstances and jurisdiction. We are not asserting a blanket exemption
+          from state privacy law here, and you should not rely on this policy as legal advice about
+          which laws apply to you. If you have questions about your rights under a specific state
+          law, please contact us using the information in Section 10.</p>
 
         <h2 id="10-changes-contact" className="text-[16px] font-semibold mt-8 mb-2">
           10. Changes to This Policy &amp; Contact Info
