@@ -40,7 +40,7 @@
 - [x] Static assets served with correct `Cache-Control` and immutable JS bundle hashes — verified live 2026-09-02: `sw.js` → `public, max-age=0, must-revalidate`, `manifest.json` → `public, max-age=3600`, a JS chunk → `public,max-age=31536000,immutable`. All correct.
 - [x] CDN in front of the frontend — Vercel's edge network serves every deployment through their CDN by default; no separate setup needed. Already confirmed via `x-vercel-cache`/`server: Vercel` response headers seen repeatedly this session.
 - [x] Domain + TLS certificate configured — `heiatlas.ai`, HTTPS enforced, HSTS on both frontend and backend. Confirmed repeatedly this session (most recently in the HTTPS/HSTS item above).
-- [ ] Add real PWA icons at `public/apple-touch-icon.png`, `public/icon-192.png`, `public/icon-512.png` — still true, not stale. Checked live 2026-09-02: all three still 404.
+- [x] Add real PWA icons — done 2026-09-02. Generated to match the existing "HA" brand chip (navy `#0B2447` background, bold white Inter "HA", same mark already used in `LeftSidebar.tsx`) at the exact sizes/format `manifest.json` declares: 180×180 (apple-touch-icon, opaque, full-bleed — Apple applies its own corner rounding), 192×192 and 512×512 (both `"purpose": "any maskable"` — kept the glyph conservatively inside the standard safe-zone circle so an aggressive OS mask shape can't clip it). Verified locally: all three + `manifest.json` return 200, not 404.
 
 ### Legal / policy pages
 - [ ] Terms of service link in login screen footer.
