@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/session';
 import {
-  getOverview, getUsers, getFeedback, getActivity, getEncounters, getRetention, approveUser,
-  type AdminOverview, type AdminUserRow, type AdminFeedbackRow, type AdminActivity, type AdminEncounters, type AdminRetention,
+  getOverview, getUsers, getFeedback, getActivity, getEncounters, getRetention, getErrors, approveUser,
+  type AdminOverview, type AdminUserRow, type AdminFeedbackRow, type AdminActivity, type AdminEncounters, type AdminRetention, type AdminErrors,
 } from '@/lib/admin';
 
-type Tab = 'users' | 'feedback' | 'activity' | 'encounters' | 'formats' | 'retention' | 'map';
+type Tab = 'users' | 'feedback' | 'activity' | 'encounters' | 'formats' | 'retention' | 'errors' | 'map';
 type Module = 'ambient' | 'integrator' | 'consensus';
 const REFRESH_MS = 30_000;
 
@@ -30,6 +30,7 @@ export default function AdminPage() {
   const [activity, setActivity] = useState<AdminActivity | null>(null);
   const [encounters, setEncounters] = useState<AdminEncounters | null>(null);
   const [retention, setRetention] = useState<AdminRetention | null>(null);
+  const [errors, setErrors] = useState<AdminErrors | null>(null);
   const [tab, setTab] = useState<Tab>('users');
   const [activeModule, setActiveModule] = useState<Module>('ambient');
   const [err, setErr] = useState<string | null>(null);
@@ -45,9 +46,9 @@ export default function AdminPage() {
     let alive = true;
     const load = async () => {
       try {
-        const [ov, us, fb, ac, en, rt] = await Promise.all([getOverview(), getUsers(), getFeedback(200), getActivity(14), getEncounters(14), getRetention()]);
+        const [ov, us, fb, ac, en, rt, es] = await Promise.all([getOverview(), getUsers(), getFeedback(200), getActivity(14), getEncounters(14), getRetention(), getErrors(14)]);
         if (!alive) return;
-        setOverview(ov); setUsers(us); setFeedback(fb); setActivity(ac); setEncounters(en); setRetention(rt);
+        setOverview(ov); setUsers(us); setFeedback(fb); setActivity(ac); setEncounters(en); setRetention(rt); setErrors(es);
         setAuthorized(true); setErr(null);
       } catch (e: unknown) {
         if (!alive) return;
@@ -138,7 +139,7 @@ export default function AdminPage() {
           {/* Tabs */}
           <div className="px-6 md:px-10">
             <div className="inline-flex p-1 bg-canvas rounded-button">
-              {(['users', 'encounters', 'formats', 'activity', 'retention', 'feedback', 'map'] as Tab[]).map((t) => (
+              {(['users', 'encounters', 'formats', 'activity', 'retention', 'errors', 'feedback', 'map'] as Tab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -158,6 +159,7 @@ export default function AdminPage() {
             {tab === 'formats' && encounters && <FormatsView data={encounters} />}
             {tab === 'activity' && activity && <ActivityView data={activity} />}
             {tab === 'retention' && retention && <RetentionView data={retention} />}
+            {tab === 'errors' && errors && <ErrorsView data={errors} />}
             {tab === 'feedback' && <FeedbackList rows={feedback} />}
             {tab === 'map' && <LocationMap rows={users} />}
           </main>
@@ -490,6 +492,68 @@ function RetentionView({ data }: { data: AdminRetention }) {
                   <Td right className="tabular-nums"><span title={checkpointTitle(c.day2)}>{checkpointLabel(c.day2)}</span></Td>
                   <Td right className="tabular-nums"><span title={checkpointTitle(c.week2)}>{checkpointLabel(c.week2)}</span></Td>
                   <Td right className="tabular-nums"><span title={checkpointTitle(c.month2)}>{checkpointLabel(c.month2)}</span></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ErrorsView({ data }: { data: AdminErrors }) {
+  const rateLabel = (rate: number | null) => (rate !== null ? `${rate}%` : '—');
+
+  return (
+    <div className="space-y-6">
+      <p className="text-[12px] text-muted -mt-1">
+        Same signals behind the automated alert emails (`services/alerting.py`), persisted daily so they can be viewed
+        as a trend here instead of only in the moment something trips a threshold.
+      </p>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card label="5xx responses" value={data.totals.fivexx_count.toLocaleString()} />
+        <Card
+          label="Transcription failure rate"
+          value={`${rateLabel(data.totals.transcription_failure_rate)} (${data.totals.transcription_failures}/${data.totals.transcription_attempts})`}
+        />
+        <Card
+          label="Encounter save failure rate"
+          value={`${rateLabel(data.totals.encounter_save_failure_rate)} (${data.totals.encounter_save_failures}/${data.totals.encounter_save_attempts})`}
+        />
+        <Card label="Daily-cap 429s" value={data.totals.daily_cap_429_count.toLocaleString()} />
+      </div>
+
+      <div className="ds-card overflow-x-auto">
+        <div className="px-3 py-2 border-b border-rule text-[13px] font-semibold text-ink">
+          Last {data.window_days} days
+        </div>
+        {data.per_day.length === 0 ? (
+          <p className="text-[13px] text-muted p-4">No data yet.</p>
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead className="bg-canvas text-muted">
+              <tr className="text-left">
+                <Th>Date</Th><Th right>5xx</Th><Th right>Transcription fail rate</Th><Th right>Encounter save fail rate</Th><Th right>Daily-cap 429s</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...data.per_day].reverse().map((d) => (
+                <tr key={d.date} className="border-t border-rule">
+                  <Td>{d.date}</Td>
+                  <Td right className="tabular-nums">{d.fivexx_count}</Td>
+                  <Td right className="tabular-nums">
+                    <span title={`${d.transcription_failures}/${d.transcription_attempts} failed`}>
+                      {rateLabel(d.transcription_failure_rate)}
+                    </span>
+                  </Td>
+                  <Td right className="tabular-nums">
+                    <span title={`${d.encounter_save_failures}/${d.encounter_save_attempts} failed`}>
+                      {rateLabel(d.encounter_save_failure_rate)}
+                    </span>
+                  </Td>
+                  <Td right className="tabular-nums">{d.daily_cap_429_count}</Td>
                 </tr>
               ))}
             </tbody>

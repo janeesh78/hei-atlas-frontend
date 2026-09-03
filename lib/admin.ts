@@ -113,11 +113,30 @@ export interface AdminRetention {
   };
 }
 
+export interface AdminErrorDay {
+  date: string;
+  fivexx_count: number;
+  transcription_attempts: number;
+  transcription_failures: number;
+  transcription_failure_rate: number | null;
+  encounter_save_attempts: number;
+  encounter_save_failures: number;
+  encounter_save_failure_rate: number | null;
+  daily_cap_429_count: number;
+}
+
+export interface AdminErrors {
+  window_days: number;
+  per_day: AdminErrorDay[];
+  totals: Omit<AdminErrorDay, 'date'>;
+}
+
 export const getOverview   = () => get<AdminOverview>('/admin/overview');
 export const getUsers      = () => get<AdminUserRow[]>('/admin/users');
 export const getFeedback   = (limit = 100) => get<AdminFeedbackRow[]>(`/admin/feedback?limit=${limit}`);
 export const getActivity   = (days = 14) => get<AdminActivity>(`/admin/activity?days=${days}`);
 export const getEncounters = (days = 14) => get<AdminEncounters>(`/admin/encounters?days=${days}`);
 export const getRetention  = () => get<AdminRetention>('/admin/retention');
+export const getErrors     = (days = 14) => get<AdminErrors>(`/admin/errors?days=${days}`);
 export const approveUser   = (id: string) =>
   post<{ ok: boolean; id: string; is_approved: boolean; already_approved: boolean }>(`/admin/users/${id}/approve`);
