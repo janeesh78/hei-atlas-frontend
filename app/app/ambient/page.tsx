@@ -23,6 +23,7 @@ import {
 import { RecordingQueue, saveStandbyPart, takeStandbyDraft, clearStandbyDraft, type PendingRecording } from '@/lib/recordingQueue';
 import { reprobeApiBase } from '@/lib/apiBase';
 import PendingUploadsPanel from '@/components/PendingUploadsPanel';
+import PasskeysModal from '@/components/PasskeysModal';
 import { matchCitations } from '@/lib/citations';
 import { fetchNearbyTrials, type NearbyTrial } from '@/lib/trials';
 import { classifyQuery, SHORT_QUERY_CHARS, type Intent } from '@/lib/intent';
@@ -145,6 +146,7 @@ export default function Home() {
   // avoids the React hydration mismatch when the user is actually offline.
   const [networkOnline, setNetworkOnline] = useState(true);
   const [uploadsPanelOpen, setUploadsPanelOpen] = useState(false);
+  const [passkeysOpen, setPasskeysOpen] = useState(false);
   const [todaysEncounters, setTodaysEncounters] = useState<SavedEncounter[]>([]);
   const [lastSavedEncounterId, setLastSavedEncounterId] = useState<string | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -1978,7 +1980,7 @@ export default function Home() {
 
       {/* ── Left sidebar (desktop fixed / mobile drawer) ───────────────── */}
       <div className="hidden lg:block w-[260px] flex-shrink-0">
-        <LeftSidebar user={user ? { name: user.name, credentials: user.credentials, email: user.email } : null} onLogout={sessionLogout} encounters={todaysEncounters} onSelectEncounter={handleSelectEncounter} onNewPatient={handleNewPatient} />
+        <LeftSidebar user={user ? { name: user.name, credentials: user.credentials, email: user.email } : null} onLogout={sessionLogout} encounters={todaysEncounters} onSelectEncounter={handleSelectEncounter} onNewPatient={handleNewPatient} onOpenPasskeys={() => setPasskeysOpen(true)} />
       </div>
       {/* Mobile drawer */}
       {mobileNavOpen && (
@@ -1995,7 +1997,7 @@ export default function Home() {
         }`}
         aria-hidden={!mobileNavOpen}
       >
-        <LeftSidebar user={user ? { name: user.name, credentials: user.credentials, email: user.email } : null} onLogout={sessionLogout} encounters={todaysEncounters} onSelectEncounter={handleSelectEncounter} onNewPatient={handleNewPatient} />
+        <LeftSidebar user={user ? { name: user.name, credentials: user.credentials, email: user.email } : null} onLogout={sessionLogout} encounters={todaysEncounters} onSelectEncounter={handleSelectEncounter} onNewPatient={handleNewPatient} onOpenPasskeys={() => setPasskeysOpen(true)} />
       </div>
 
       {/* ── Center workspace ──────────────────────────────────────────── */}
@@ -2420,6 +2422,9 @@ export default function Home() {
         queue={queueRef.current}
         onClose={() => setUploadsPanelOpen(false)}
       />
+
+      {/* Passkey management — opens via the LeftSidebar user menu */}
+      {passkeysOpen && <PasskeysModal onClose={() => setPasskeysOpen(false)} />}
     </div>
   );
 }

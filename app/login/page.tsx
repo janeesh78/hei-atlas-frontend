@@ -1,8 +1,9 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signup, login, verify } from '@/lib/auth';
+import { browserSupportsWebAuthn, loginWithPasskey } from '@/lib/webauthn';
 import { useSession } from '@/lib/session';
 
 type Mode = 'signup' | 'login';
@@ -26,6 +27,12 @@ function LoginPageInner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  // Starts false on both server and the client's first render (avoids a
+  // hydration mismatch), then updates right after mount — see
+  // lib/webauthn.ts's browserSupportsWebAuthn, which reads window.
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  useEffect(() => { setPasskeySupported(browserSupportsWebAuthn()); }, []);
 
   // Signup fields
   const [name, setName] = useState('');
@@ -58,6 +65,19 @@ function LoginPageInner() {
       setError(e2 instanceof Error ? e2.message : 'Something went wrong.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const submitPasskeyLogin = async () => {
+    setPasskeyBusy(true); setError(null); setNotice(null);
+    try {
+      const res = await loginWithPasskey();
+      setUser(res.user);
+      router.push('/app');
+    } catch (e2: unknown) {
+      setError(e2 instanceof Error ? e2.message : 'Passkey sign-in failed.');
+    } finally {
+      setPasskeyBusy(false);
     }
   };
 
@@ -139,6 +159,23 @@ function LoginPageInner() {
             <button type="submit" disabled={busy} className="btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed">
               {busy ? 'Sending code…' : mode === 'signup' ? 'Send verification code' : 'Send sign-in code'}
             </button>
+            {mode === 'login' && passkeySupported && (
+              <>
+                <div className="flex items-center gap-3 pt-1">
+                  <div className="flex-1 h-px bg-rule" />
+                  <span className="text-[11px] text-muted">or</span>
+                  <div className="flex-1 h-px bg-rule" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { void submitPasskeyLogin(); }}
+                  disabled={passkeyBusy}
+                  className="btn-secondary w-full disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {passkeyBusy ? 'Waiting for passkey…' : 'Sign in with a passkey'}
+                </button>
+              </>
+            )}
             <p className="text-[12px] text-muted text-center mt-3">
               A one-time 6-digit code will be sent to your email.
             </p>

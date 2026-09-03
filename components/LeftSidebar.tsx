@@ -40,6 +40,8 @@ interface LeftSidebarProps {
    *  billing toggle in the encounter panel (established vs. new-patient E/M
    *  coding). This button never touches that toggle. */
   onNewPatient?: () => void;
+  /** Opens the passkey management modal (see PasskeysModal). */
+  onOpenPasskeys?: () => void;
 }
 
 // Compact initials for the profile avatar tile.
@@ -59,6 +61,7 @@ export default function LeftSidebar({
   encounters,
   onSelectEncounter,
   onNewPatient,
+  onOpenPasskeys,
 }: LeftSidebarProps = {}) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -100,6 +103,13 @@ export default function LeftSidebar({
             {showUserMenu && (
               <div className="mt-1 ds-card p-1">
                 <div className="px-2 py-1.5 text-[12px] text-muted truncate">{user.email}</div>
+                <button
+                  type="button"
+                  onClick={() => { setShowUserMenu(false); onOpenPasskeys?.(); }}
+                  className="w-full text-left px-2 py-1.5 text-[13px] text-ink hover:bg-canvas rounded-button"
+                >
+                  Passkeys
+                </button>
                 <button
                   type="button"
                   onClick={() => { setShowUserMenu(false); onLogout?.(); }}
