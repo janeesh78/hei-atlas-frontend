@@ -10,25 +10,21 @@ A Notice of Privacy Practices (NPP) is a specific, defined HIPAA document (45 CF
 patients or bills for care — must give to the individuals it treats, describing how their health
 information is used and their rights regarding it.
 
-Hei Atlas/Oncology Solutions LLC's actual role under HIPAA isn't settled yet (see `COMPLIANCE.md`'s
-"Register the entity type" item). Based on how the product actually works — physicians use Hei Atlas
-as a documentation tool for encounters that happen under their own practice's care relationship, not
-Hei Atlas's — the more likely classification is that **each physician's own practice is the Covered
-Entity**, with Hei Atlas acting as a **Business Associate** to that practice. If that's how this
-shakes out, the obligation to issue an NPP to patients belongs to the practice, not to Hei Atlas —
-a Business Associate's obligations run through its BAAs with covered entities, not through its own
-patient-facing NPP.
+**Resolved 2026-09-04: Oncology Solutions LLC is a Business Associate**, serving physicians/practices
+who are themselves the Covered Entities (see `COMPLIANCE.md`'s "Register the entity type" item, now
+checked). This means **the obligation to issue an NPP to patients belongs to each physician's own
+practice, not to Hei Atlas** — a Business Associate's obligations run through its BAA with each
+covered entity it serves, not through its own patient-facing NPP. Hei Atlas does not need to (and per
+§164.520's own definition, generally should not) publish this as its own notice to patients.
 
-This draft is written so it's useful either way:
-- If Hei Atlas is a Business Associate (the more likely case): this serves as a **template/reference**
-  a physician can adapt into their own practice's NPP, specifically covering how their practice's use
-  of Hei Atlas fits into what patients are told.
-- If some future version of this product ever contracts directly with patients (the Covered Entity
-  case): this becomes the real, publishable NPP, once the placeholder sections below are filled in
-  and reviewed by counsel.
+**What this document is, now that the classification is settled:** a **template/reference** a
+physician can adapt into their own practice's NPP, specifically covering how their practice's use of
+Hei Atlas fits into what patients are told. It is not, and will not become, something Oncology
+Solutions LLC itself publishes or distributes to patients directly.
 
-**Don't publish this as-is.** Confirm the entity classification first — it changes who this document
-is even for.
+**Still don't publish this as Hei Atlas's own notice.** Hand it to physicians as a starting point for
+their own practice's NPP language instead — see §"Who this notice covers" below, which should name
+the practice, not Hei Atlas.
 
 ---
 
@@ -41,8 +37,8 @@ GET ACCESS TO THIS INFORMATION. PLEASE REVIEW IT CAREFULLY.**
 
 ### Who this notice covers
 
-[If issued by a physician's practice: name of the practice/provider.]
-[If issued by Hei Atlas directly: Oncology Solutions LLC, operator of Hei Atlas (heiatlas.ai).]
+[Name of the physician's practice/provider — this notice is issued by the practice, not by Hei Atlas
+or Oncology Solutions LLC. See the resolved entity-classification note above.]
 
 ### Our commitment to your privacy
 
@@ -94,7 +90,7 @@ law, including in response to court orders, subpoenas, or public health reportin
 
 ### How to exercise these rights or file a complaint
 
-[Contact method — practice's own contact info, or if Hei Atlas-issued: compliance@oncologysolutions.us]
+[Contact method — the practice's own contact info.]
 
 You may also file a complaint with the U.S. Department of Health and Human Services, Office for Civil
 Rights, without fear of retaliation.
@@ -108,9 +104,9 @@ we already have as well as information we receive in the future.
 
 ## Sign-off (do not distribute until completed)
 
-- [ ] Entity classification confirmed (Covered Entity vs. Business Associate) — see `COMPLIANCE.md`
+- [x] Entity classification confirmed — Business Associate (2026-09-04, see `COMPLIANCE.md`)
 - [ ] Reviewed by counsel
-- [ ] [If practice-issued] Adapted with the specific practice's name, contact info, and any
-      practice-specific payment/operations language
+- [ ] Adapted with the specific practice's name, contact info, and any practice-specific
+      payment/operations language
 - [ ] Effective date set
 - [ ] Publication method decided (posted, handed out, posted online per §164.520(c))

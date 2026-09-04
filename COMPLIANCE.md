@@ -92,9 +92,23 @@ Recommended platform for evidence collection + auditor coordination:
 
 ## Business Associate Agreements — CHECKLIST
 
-**Sign a BAA with each vendor below before onboarding external physicians.**
-Without these, the app is not HIPAA compliant, no matter what any technical
-control says.
+**New as of 2026-09-04, and easy to miss:** now that the entity classification is resolved as
+**Business Associate**, the BAA obligation runs in *two* directions, not one:
+
+- [ ] **Downstream (Hei Atlas → each physician/practice): a BAA must be signed with every physician
+  or practice before their PHI is handled.** This is the reverse direction from the vendor list below
+  — here, Hei Atlas is the Business Associate *being contracted*, not the customer requesting a BAA
+  from a vendor. Nothing in this repo currently implements this: no BAA template exists for
+  physicians/practices to sign, and no signup-flow step captures it. Needs: (1) a BAA template drafted
+  and reviewed by counsel — a bilateral contract like this is a meaningfully higher-stakes drafting
+  task than the internal policy documents below, since Hei Atlas will be legally bound by its exact
+  terms with every signing physician; (2) a decision on where it's executed (e-signature at signup,
+  a manual step during admin approval, etc.); (3) tracking, analogous to `baa-intake.csv` but for the
+  physician-facing direction instead of the vendor-facing one.
+- [ ] **Upstream (Hei Atlas ← each subprocessor): sign a BAA with each vendor below** before
+  onboarding external physicians — this is the direction already tracked in the list below.
+
+Without both directions, the app is not HIPAA compliant, no matter what any technical control says.
 
 - [ ] **OpenAI** — request via <mailto:baa@openai.com> (corrected 2026-09-04, confirmed via OpenAI's own Help Center — direct email, not the enterprise-privacy page; no Enterprise plan needed for the API BAA itself, but requires the zero-data-retention rider for the BAA to actually cover PHI in requests). Draft ready in `baa-request-drafts.md`.
 - [ ] **Anthropic** — documented path is the sales contact form (<https://claude.com/contact-sales>) or an existing account contact; `legal@anthropic.com` is plausible but unconfirmed as the real BAA intake (available on Team/Enterprise + API with prior arrangement). Worth knowing before signing: Covered Models under Anthropic's BAA require 30-day retention and are **not** compatible with Zero Data Retention — the opposite of OpenAI's requirement above, so signing both means an asymmetric retention posture across model vendors, worth deciding on purpose rather than discovering later. Draft ready in `baa-request-drafts.md`.
@@ -129,7 +143,7 @@ lose track of a required follow-up buried in that same line once it's checked.
 - [ ] Draft and publish an internal Security Policy, Sanctions Policy, Contingency Plan, and Breach Notification Procedure. First drafts: [`SECURITY_POLICY.md`](SECURITY_POLICY.md) (Security + Sanctions combined, 2026-09-04), [`CONTINGENCY_PLAN.md`](CONTINGENCY_PLAN.md) (2026-09-04, references `BACKUP_RESTORE.md` rather than duplicating it), [`BREACH_NOTIFICATION_PROCEDURE.md`](BREACH_NOTIFICATION_PROCEDURE.md) (2026-09-04) — none adopted yet, each has its own sign-off checklist at the bottom.
 - [ ] Complete HIPAA workforce training (Vanta and Drata both offer this in-app).
 - [ ] Sign BAAs (see above).
-- [ ] Register the entity type: Business Associate if serving Covered Entities, Covered Entity if contracting directly with patients.
+- [x] Register the entity type: Business Associate if serving Covered Entities, Covered Entity if contracting directly with patients. **Resolved 2026-09-04: Business Associate** — Hei Atlas serves physicians/practices who are themselves the Covered Entities. `NOTICE_OF_PRIVACY_PRACTICES.md`, `BREACH_NOTIFICATION_PROCEDURE.md`, and `RISK_ASSESSMENT.md` (R12) all updated accordingly — this determination should still get formal counsel sign-off (each document's own sign-off block), but no further drafting is blocked on it.
 
 **SOC 2 — before starting the audit window:**
 - [ ] Pick a compliance platform (Vanta / Drata / Secureframe).
@@ -144,6 +158,7 @@ lose track of a required follow-up buried in that same line once it's checked.
 - 2026-07-03: Initial version. Shipped: 15-min sliding session TTL, per-IP rate limits, phi_access_log, `/me/export`, `/me/account` delete, `/admin/access-review`, `/admin/incidents`, CSP + COOP + CORP + HSTS headers. Documentation of all vendor + policy work still owed.
 - 2026-09-04: First drafts of all five required policy documents added — `NOTICE_OF_PRIVACY_PRACTICES.md`, `SECURITY_POLICY.md` (includes Sanctions Policy), `CONTINGENCY_PLAN.md`, `BREACH_NOTIFICATION_PROCEDURE.md`. All are drafts only, none adopted — each carries its own sign-off checklist, and the NPP + Breach Notification docs both explicitly flag that the still-open entity-classification question (this section, last item) changes their operative content, not just a formality to check off separately.
 - 2026-09-04: First initial risk assessment drafted (`RISK_ASSESSMENT.md`), NIST 800-30 methodology, 12-item risk register covering both technical risks (session/auth attacks, cross-user isolation, single-machine availability, passkey code-path maturity) and process risks (self-review limitation, unresolved entity classification). Not adopted; rates entity classification as the single highest residual risk in the register.
+- 2026-09-04: Entity classification resolved as **Business Associate** (serving physicians/practices as the Covered Entities). Updated `NOTICE_OF_PRIVACY_PRACTICES.md` (now definitively a template for practices, not a Hei Atlas-published notice), `BREACH_NOTIFICATION_PROCEDURE.md` (§3, the BA path, confirmed operative; §4 kept only for reference), and `RISK_ASSESSMENT.md` (R12 resolved, moved from High to Low). Surfaced a new, previously untracked gap in the process: as a Business Associate, Hei Atlas needs its own signed BAA with each physician/practice it serves — the reverse direction from the vendor-BAA tracking below, and not yet implemented anywhere (no template, no signup-flow step). Added as a new checklist item above.
 - 2026-07-22: Session inactivity TTL increased from 15 to 30 minutes (server `SESSION_TTL` + client `IDLE_MS`, kept in sync). Client-side idle timer is now synchronized across browser tabs via a localStorage activity broadcast, so activity in one tab keeps the shared session alive in all tabs of the same browser instead of an idle tab independently signing everyone out.
 - 2026-08-25: Fixed premature session expiry during ambient recording. The 4-minute keep-alive ping (the only thing sliding the session while recording, since the general activity heartbeat goes idle once the physician stops clicking) had no `visibilitychange` catch-up — a backgrounded or throttled tab could miss enough pings to let the 30-minute TTL lapse mid-recording. `app/app/ambient/page.tsx` now also pings on both tab-hide and tab-show while a recording is active or paused.
 - 2026-08-26: Broadened what counts as "activity" for the client-side idle timer (`lib/session.tsx`). Previously only `mousedown`/`keydown`/`touchstart`/`wheel` counted, so reading a note for 20-30+ minutes without clicking or using a scroll wheel was indistinguishable from having stepped away and triggered logout mid-read. Added throttled `mousemove` and `scroll` (capture-phase, so it also catches scrolling inside a nested panel) — a session with genuinely no mouse movement or scrolling anywhere still times out at 30 minutes, unchanged.

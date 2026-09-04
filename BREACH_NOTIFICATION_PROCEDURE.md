@@ -17,24 +17,18 @@ happened, start at §1.
 
 ## A note on who this notice runs to — read before an incident, not during one
 
-Like `NOTICE_OF_PRIVACY_PRACTICES.md` flags, Oncology Solutions LLC's HIPAA role (Covered Entity vs.
-Business Associate) isn't formally settled yet. This matters here specifically because **who gets
-notified, and on what timeline, differs based on that answer**:
+**Resolved 2026-09-04: Oncology Solutions LLC is a Business Associate**, serving physicians/practices
+who are themselves the Covered Entities (see `COMPLIANCE.md`'s "Register the entity type" item, now
+checked). **§3 below is the operative path.** Oncology Solutions LLC's obligation under HIPAA is to
+**notify the affected physician/practice** (the Covered Entity) without unreasonable delay, and no
+later than 60 days after discovery, or sooner if the BAA with that practice specifies a shorter
+window. The practice then carries its own separate obligation to notify their patients, HHS, and
+potentially media — Oncology Solutions LLC does not do that notification directly.
 
-- **If Hei Atlas is a Business Associate** to each physician's own practice (the more likely case,
-  given the tool-provider relationship) — Oncology Solutions LLC's obligation under HIPAA is to
-  **notify the affected physician/practice** (the Covered Entity) without unreasonable delay, and no
-  later than 60 days after discovery, or sooner if the BAA with that practice specifies a shorter
-  window. The practice then carries its own separate obligation to notify their patients, HHS, and
-  potentially media — Oncology Solutions LLC does not do that notification directly under this model.
-- **If Oncology Solutions LLC is itself a Covered Entity** (only applicable if some future version of
-  the product contracts with patients directly) — the full direct-to-patient/HHS/media notification
-  chain in §4 below applies to Oncology Solutions LLC itself.
-
-**Until this is resolved, follow the Business Associate path (§3) as the operating assumption** — it's
-the narrower, faster-triggering obligation, and defaulting to it is the safer error if the
-classification turns out the other way. Confirm with counsel as part of adopting this document, and
-revisit immediately if the entity classification determination changes.
+§4 (the Covered Entity path — direct-to-patient/HHS/media notification) is retained below only for
+completeness, in case some future version of the product ever contracts with patients directly. It is
+not the operative path today and should not be followed for an actual incident under the current
+business model.
 
 ---
 
@@ -85,7 +79,7 @@ definition (45 CFR §164.402(1)):
 **Document the assessment either way** — including a conclusion that notification isn't required. See
 §6.
 
-## 3. If Hei Atlas is the Business Associate (current operating assumption — see note above)
+## 3. Operative path: Hei Atlas is the Business Associate (confirmed 2026-09-04 — see note above)
 
 1. Notify the affected physician(s)/practice(s) **without unreasonable delay, and no later than 60
    days** after the discovery date established in §1.
@@ -100,7 +94,7 @@ definition (45 CFR §164.402(1)):
    reasonable cooperation/information to the practice for their own notification is good practice and
    likely a BAA term.
 
-## 4. If Oncology Solutions LLC is itself the Covered Entity (only if that classification is confirmed)
+## 4. Reference only, not operative today: if Oncology Solutions LLC were the Covered Entity
 
 1. **Notify affected individuals** without unreasonable delay, no later than **60 days** after
    discovery. Must include: a brief description of what happened: including discovery date and
@@ -154,8 +148,7 @@ deliberately, since during a live incident it matters that there's no ambiguity 
 ## Sign-off (do not treat as adopted until completed)
 
 - [ ] Reviewed by counsel / a compliance advisor
-- [ ] Entity classification confirmed (changes which of §3/§4 is the real operative path) — see
-      `COMPLIANCE.md` and `NOTICE_OF_PRIVACY_PRACTICES.md`
+- [x] Entity classification confirmed — Business Associate (2026-09-04); §3 is the operative path
 - [ ] Adoption date set
 - [ ] Confirm whether any executed BAA (once signed) specifies a notification window shorter than the
       statutory 60 days, and note it against that vendor in `baa-intake.csv`

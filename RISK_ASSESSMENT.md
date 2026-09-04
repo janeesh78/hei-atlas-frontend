@@ -91,23 +91,28 @@ described in `baa-intake.csv`.
 | R9 | Passkey/WebAuthn code path (new this session) has a latent defect, being newer and less battle-tested than the OTP path | Low | Medium | Low | Challenge storage fails closed (not open, unlike the rest of the codebase's Redis posture) specifically because this is the one path where fail-open would be a real replay hole; verified via synthetic ceremonies and real-device testing (Touch ID, Face ID ×2) before shipping | Continue treating OTP as the permanent, always-available fallback rather than ever making passkeys the sole auth method |
 | R10 | A schema/migration gap causes a NOT NULL or similar defect in production (already occurred once this session, caught before shipping) | Medium | Low | Low | Caught via the DailyErrorStats incident (local dev DB missing a column production had); `server_default` now applied proactively on new nullable-averse columns as a direct lesson from that incident | Consider a lightweight local/production schema-drift check before relying on manual catches alone |
 | R11 | Formal disaster-recovery cutover has not been timed end-to-end (data recovery is verified; full app cutover is not) | Medium | Medium | Medium | Data-recovery mechanism itself independently verified 2026-09-04 (marker-row isolation test); documented gap in `CONTINGENCY_PLAN.md` §3.1 | Run a full timed cutover drill; also complete `BACKUP_RESTORE.md` Step 4 (second verification run), currently deferred by choice |
-| R12 | Entity classification (Covered Entity vs. Business Associate) remains unresolved, leaving downstream obligations (NPP, breach notification chain) ambiguous | High | Medium | High | Both `NOTICE_OF_PRIVACY_PRACTICES.md` and `BREACH_NOTIFICATION_PROCEDURE.md` default to the narrower/faster-triggering Business Associate obligation as a safe operating assumption in the meantime | Resolve with counsel — this is the single highest-priority open item in this entire assessment, since it gates the real operative content of two other policy documents |
+| R12 | ~~Entity classification (Covered Entity vs. Business Associate) remains unresolved~~ — **resolved 2026-09-04: Business Associate**, serving physicians/practices as the Covered Entities | Low | Low | Low | `COMPLIANCE.md`'s "Register the entity type" item now checked; `NOTICE_OF_PRIVACY_PRACTICES.md` and `BREACH_NOTIFICATION_PROCEDURE.md` both updated to treat the Business Associate path as operative rather than a safe-default assumption | None required — still get counsel's formal sign-off on this determination as part of each document's own sign-off block, but no further analysis is blocked on it |
 
 ## 6. Summary of top residual risks
 
 Ordered by risk level, highest first:
 
-1. **R12 — entity classification unresolved (High).** Blocks finalizing two of the four policy
-   documents drafted 2026-09-04. Recommend resolving with counsel before those documents are adopted.
-2. **R1, R2, R3, R4, R6, R8, R11 (Medium).** Each has a real existing control already in place;
+1. **R1, R2, R3, R4, R6, R8, R11 (Medium).** Each has a real existing control already in place;
    none represent an unmitigated gap, but each has a clear, already-identified next step (above) that
    would move it to Low.
-3. **R5, R7, R9, R10 (Low).** Accepted residual risk or already substantially mitigated; revisit
-   opportunistically rather than urgently.
+2. **R5, R7, R9, R10, R12 (Low).** Accepted residual risk or already substantially mitigated; revisit
+   opportunistically rather than urgently. R12 (entity classification) moved from this register's
+   highest-rated risk to Low as of 2026-09-04, once resolved as Business Associate — see that row.
 
-No risk in this register was rated High on both axes simultaneously (i.e., nothing is both likely
-*and* high-impact with no mitigating control) — the closest is R12, which is high-likelihood-of-
-remaining-unresolved but medium-impact, not a High/High combination.
+No risk in this register is currently rated High on either axis. Before 2026-09-04, R12 was the one
+High-rated item (unresolved entity classification, gating two other documents); resolving it removed
+the register's only High.
+
+**A new item surfaced by resolving R12, tracked separately rather than folded in here as a residual
+risk**: being a Business Associate means Hei Atlas needs its *own* signed BAA with each physician/
+practice it serves (the reverse direction of the vendor-BAA tracking in `baa-intake.csv`, which is
+Hei Atlas as customer, not Hei Atlas as the BA being contracted). See `COMPLIANCE.md`'s BAA section
+for this as a new checklist item — it's a contractual gap to close, not itself a risk-register entry.
 
 ## 7. Review cadence
 
@@ -120,6 +125,6 @@ incident, or any material infrastructure change (e.g., moving off a single Fly.i
 ## Sign-off (do not treat as final until completed)
 
 - [ ] Reviewed by counsel / a compliance advisor
-- [ ] R12 (entity classification) resolved — see `COMPLIANCE.md`
+- [x] R12 (entity classification) resolved — Business Associate (2026-09-04), see `COMPLIANCE.md`
 - [ ] Adoption date set
 - [ ] First annual re-assessment date scheduled (§7)
