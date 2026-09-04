@@ -98,13 +98,13 @@ Recommended platform for evidence collection + auditor coordination:
 - [ ] **Downstream (Hei Atlas → each physician/practice): a BAA must be signed with every physician
   or practice before their PHI is handled.** This is the reverse direction from the vendor list below
   — here, Hei Atlas is the Business Associate *being contracted*, not the customer requesting a BAA
-  from a vendor. Nothing in this repo currently implements this: no BAA template exists for
-  physicians/practices to sign, and no signup-flow step captures it. Needs: (1) a BAA template drafted
-  and reviewed by counsel — a bilateral contract like this is a meaningfully higher-stakes drafting
-  task than the internal policy documents below, since Hei Atlas will be legally bound by its exact
-  terms with every signing physician; (2) a decision on where it's executed (e-signature at signup,
-  a manual step during admin approval, etc.); (3) tracking, analogous to `baa-intake.csv` but for the
-  physician-facing direction instead of the vendor-facing one.
+  from a vendor. First draft: [`BUSINESS_ASSOCIATE_AGREEMENT.md`](BUSINESS_ASSOCIATE_AGREEMENT.md)
+  (2026-09-04) — a standard-form, click-through addendum to the Terms of Use rather than a bespoke
+  per-physician contract, modeled on Neon's/Vercel's own click-through BAAs (see `baa-intake.csv`).
+  **Not adopted — this one needs a real healthcare/HIPAA attorney's review before any physician sees
+  it**, materially more so than the internal policy documents, since it creates binding obligations the
+  moment a physician accepts it. Still open: the execution mechanism (signup vs. admin-approval-time
+  click-through) and tracking for this direction, analogous to `baa-intake.csv` but reversed.
 - [ ] **Upstream (Hei Atlas ← each subprocessor): sign a BAA with each vendor below** before
   onboarding external physicians — this is the direction already tracked in the list below.
 
@@ -159,6 +159,7 @@ lose track of a required follow-up buried in that same line once it's checked.
 - 2026-09-04: First drafts of all five required policy documents added — `NOTICE_OF_PRIVACY_PRACTICES.md`, `SECURITY_POLICY.md` (includes Sanctions Policy), `CONTINGENCY_PLAN.md`, `BREACH_NOTIFICATION_PROCEDURE.md`. All are drafts only, none adopted — each carries its own sign-off checklist, and the NPP + Breach Notification docs both explicitly flag that the still-open entity-classification question (this section, last item) changes their operative content, not just a formality to check off separately.
 - 2026-09-04: First initial risk assessment drafted (`RISK_ASSESSMENT.md`), NIST 800-30 methodology, 12-item risk register covering both technical risks (session/auth attacks, cross-user isolation, single-machine availability, passkey code-path maturity) and process risks (self-review limitation, unresolved entity classification). Not adopted; rates entity classification as the single highest residual risk in the register.
 - 2026-09-04: Entity classification resolved as **Business Associate** (serving physicians/practices as the Covered Entities). Updated `NOTICE_OF_PRIVACY_PRACTICES.md` (now definitively a template for practices, not a Hei Atlas-published notice), `BREACH_NOTIFICATION_PROCEDURE.md` (§3, the BA path, confirmed operative; §4 kept only for reference), and `RISK_ASSESSMENT.md` (R12 resolved, moved from High to Low). Surfaced a new, previously untracked gap in the process: as a Business Associate, Hei Atlas needs its own signed BAA with each physician/practice it serves — the reverse direction from the vendor-BAA tracking below, and not yet implemented anywhere (no template, no signup-flow step). Added as a new checklist item above.
+- 2026-09-04: Drafted `BUSINESS_ASSOCIATE_AGREEMENT.md`, the physician/practice-facing BAA surfaced above — a standard-form click-through addendum to the Terms of Use (not a bespoke per-physician contract), covering all six required 45 CFR §164.504(e) provisions plus a shortened (10-business-day) breach-notification window feeding into `BREACH_NOTIFICATION_PROCEDURE.md` §3. This is a bilateral contract, not an internal policy — flagged as needing real attorney review before any physician sees it, a higher bar than the other four documents drafted this session.
 - 2026-07-22: Session inactivity TTL increased from 15 to 30 minutes (server `SESSION_TTL` + client `IDLE_MS`, kept in sync). Client-side idle timer is now synchronized across browser tabs via a localStorage activity broadcast, so activity in one tab keeps the shared session alive in all tabs of the same browser instead of an idle tab independently signing everyone out.
 - 2026-08-25: Fixed premature session expiry during ambient recording. The 4-minute keep-alive ping (the only thing sliding the session while recording, since the general activity heartbeat goes idle once the physician stops clicking) had no `visibilitychange` catch-up — a backgrounded or throttled tab could miss enough pings to let the 30-minute TTL lapse mid-recording. `app/app/ambient/page.tsx` now also pings on both tab-hide and tab-show while a recording is active or paused.
 - 2026-08-26: Broadened what counts as "activity" for the client-side idle timer (`lib/session.tsx`). Previously only `mousedown`/`keydown`/`touchstart`/`wheel` counted, so reading a note for 20-30+ minutes without clicking or using a scroll wheel was indistinguishable from having stepped away and triggered logout mid-read. Added throttled `mousemove` and `scroll` (capture-phase, so it also catches scrolling inside a nested panel) — a session with genuinely no mouse movement or scrolling anywhere still times out at 30 minutes, unchanged.
