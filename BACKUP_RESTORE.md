@@ -111,6 +111,8 @@ continuous mechanism rather than something a script triggers per deploy:
   since the restore point, not "not isolated" — inconclusive on its own),
   so inserted a uniquely-identifiable marker row directly on production
   and confirmed the restore branch showed zero trace of it. Marker
-  cleaned up afterward. Still need Step 4 (a second run, different
-  timestamp, ideally near the edge of the 6-hour window) before
-  BETA_LAUNCH.md's item is fully checked off.
+  cleaned up afterward. Step 4 (a second run at a different timestamp)
+  explicitly skipped for now, by choice — not attempted and failed, just
+  deferred. Revisit whenever; nothing about the procedure changes, just
+  pick a timestamp nearer the edge of the 6-hour window this time rather
+  than repeating an easy recent one.
