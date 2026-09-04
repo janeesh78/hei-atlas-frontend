@@ -98,3 +98,19 @@ continuous mechanism rather than something a script triggers per deploy:
 - 2026-09-01: Initial runbook. Scope decided: Postgres only (Redis holds
   no durable data), verify Neon's existing PITR rather than build an
   independent backup mechanism.
+- 2026-09-04: First full run of Steps 0–2. Step 0: Scale plan, 6-hour PITR
+  window (adjustable via "Configure" in the Neon UI). Step 1: nearly used
+  Neon's "Restore from history" panel, which restores the selected source
+  branch **in place** — with "production" pre-selected there, this would
+  have mutated the live database rather than creating an isolated copy.
+  Used **Branches → Create branch → From a point in time** instead, which
+  is genuinely isolated. Step 2: all 18 tables present with sane row
+  counts matching production, a known row spot-checked correctly, and
+  isolation proven definitively — a passive timestamp comparison against
+  production came back identical (meaning no new production activity
+  since the restore point, not "not isolated" — inconclusive on its own),
+  so inserted a uniquely-identifiable marker row directly on production
+  and confirmed the restore branch showed zero trace of it. Marker
+  cleaned up afterward. Still need Step 4 (a second run, different
+  timestamp, ideally near the edge of the 6-hour window) before
+  BETA_LAUNCH.md's item is fully checked off.
