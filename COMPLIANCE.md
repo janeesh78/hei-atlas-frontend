@@ -105,6 +105,18 @@ control says.
 - [ ] **Resend** — **does not offer a BAA, on any plan** (major correction 2026-09-04: confirmed directly on resend.com/security's own FAQ — "Resend is not HIPAA compliant and cannot sign a Business Associate Agreement." The previous "available on business plans" note and `hipaa@resend.com` contact were both wrong). Resend only ever carries an OTP code to the physician's own inbox, never patient data, so this may not need to be a hard blocker for onboarding — worth confirming with counsel rather than treating "0 of 7 vendors" as including an impossible one. Sent a confirmation-only email to keep a dated record; see `baa-request-drafts.md`.
 - [ ] **Twilio** — request via <https://www.twilio.com/en-us/legal/hipaa>. Added 2026-09-02 alongside SMS OTP delivery; tracked here for consistency with Resend, which plays the identical role for email (only ever carries the OTP code, never patient data) — worth confirming with counsel whether this specific use actually falls in BAA scope before treating it as a hard blocker. (Not part of the original "7 vendors" count below — Resend's discovery above applies here too.)
 
+### After signing — technical activation steps
+
+Added 2026-09-04. A signed BAA is a contract, not a switch — several of the vendors above require a
+follow-up technical step before the agreement actually covers PHI in practice. Tracked separately from
+the checklist above on purpose: checking off "sign the BAA with X" reads as "done," and it's easy to
+lose track of a required follow-up buried in that same line once it's checked.
+
+- [ ] **OpenAI** — request and confirm the Zero Data Retention (ZDR) rider is active. Without it, the signed BAA does not cover PHI in API requests at all — signing alone is not enough.
+- [ ] **Anthropic** — our organization's Primary Owner must activate the HIPAA-Ready Org setting (Data and privacy → HIPAA compliance) after signing, and accept Anthropic's BAA there too. Also confirm at that point whether Covered Models' 30-day retention requirement (incompatible with ZDR) is acceptable for our data — this doesn't block signing, but it's a real operational difference from OpenAI's posture above.
+- [ ] **Neon** — mark the relevant database(s) as HIPAA databases via their self-serve enablement process (Scale plan). Core Postgres, branching, backups, and PITR are covered; Neon Auth and the Data API are explicitly outside the HIPAA boundary regardless — don't route PHI through those even after signing.
+- [ ] **Upstash** — per their own HIPAA docs: mark the relevant database(s) as HIPAA databases, enable MFA on all Upstash Console accounts, enable Prod Pack (encryption at rest + advanced security), and enable Credential Protection.
+
 ---
 
 ## Organizational + policy work (not code)
